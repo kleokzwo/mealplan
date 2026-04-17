@@ -1,0 +1,54 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+
+import { testConnection } from './config/db.js';
+import healthRoutes from './routes/healthRoutes.js';
+import mealRoutes from './routes/mealRoutes.js';
+import planRoutes from './routes/planRoutes.js';
+import weekRoutes from './routes/weekRoutes.js';
+import preferenceRoutes from './routes/preferenceRoutes.js';
+import { notFoundHandler, errorHandler } from './middlewares/errorMiddleware.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+app.use(
+  cors({
+    origin: CLIENT_URL,
+    credentials: true,
+  })
+);
+app.use(express.json());
+
+app.get('/', (_req, res) => {
+  res.json({
+    message: 'Familien-Autopilot API läuft.',
+  });
+});
+
+app.use('/api/health', healthRoutes);
+app.use('/api/preferences', preferenceRoutes);
+app.use('/api/meals', mealRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/weeks', weekRoutes);
+
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+const startServer = async () => {
+  try {
+    await testConnection();
+    app.listen(PORT, () => {
+      console.log(`Server läuft auf http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Serverstart fehlgeschlagen:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
