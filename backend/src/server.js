@@ -8,6 +8,10 @@ import mealRoutes from './routes/mealRoutes.js';
 import planRoutes from './routes/planRoutes.js';
 import weekRoutes from './routes/weekRoutes.js';
 import preferenceRoutes from './routes/preferenceRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import { startDailySummaryJob } from "./cron/dailySummaryJob.js";
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from './routes/userRoutes.js';
 import { notFoundHandler, errorHandler } from './middlewares/errorMiddleware.js';
 
 dotenv.config();
@@ -15,6 +19,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+startDailySummaryJob();
 
 app.use(
   cors({
@@ -30,11 +36,14 @@ app.get('/', (_req, res) => {
   });
 });
 
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/preferences', preferenceRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/weeks', weekRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

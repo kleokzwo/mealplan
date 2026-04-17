@@ -1,29 +1,36 @@
 import { Settings, Users, Bell, CircleHelp } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const items = [
   {
     icon: Settings,
     title: "Einstellungen",
     text: "App, Präferenzen und Verhalten anpassen",
+    path: "/settings",
   },
   {
     icon: Users,
     title: "Familie verwalten",
     text: "Mitglieder und Haushalt später erweitern",
+    path: "/family",
   },
   {
     icon: Bell,
     title: "Benachrichtigungen",
     text: "Erinnerungen und Updates steuern",
+    path: "/settings/notifications",
   },
   {
     icon: CircleHelp,
     title: "Hilfe",
     text: "Fragen, Feedback und Support",
+    path: "/help",
   },
 ];
 
 export default function MorePage() {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
       <div className="mx-auto max-w-md">
@@ -47,6 +54,7 @@ export default function MorePage() {
               <button
                 key={item.title}
                 type="button"
+                onClick={() => navigate(item.path)}
                 className="flex w-full items-start gap-4 rounded-[24px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-200"
               >
                 <div className="rounded-2xl bg-slate-100 p-3">

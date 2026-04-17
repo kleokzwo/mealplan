@@ -329,24 +329,81 @@ export const getActiveWeek = async () => {
 
 export const updateShoppingItemStatus = async ({ itemId, isChecked }) => {
   const parsedId = Number(itemId);
+
+  const [result] = await pool.query(
+    `UPDATE shopping_items si
+     INNER JOIN weeks w ON w.id = si.week_id
+     SET si.is_checked = ?
+     WHERE si.id = ? AND w.status = 'active'`,
+    [isChecked ? 1 : 0, parsedId]
+  );
+
+  return getActiveWeek();
+};
+export const clearActiveWeek = async () => {
+  const [result] = await pool.query(`DELETE FROM weeks WHERE status = 'active'`);
+  return { deletedWeeks: result.affectedRows };
+};
+
+export const deleteShoppingItem = async ({ itemId }) => {
+  const parsedId = Number(itemId);
+
   if (!Number.isInteger(parsedId) || parsedId <= 0) {
     const error = new Error('Ungültige Einkaufslisten-ID.');
     error.statusCode = 400;
     throw error;
   }
 
-  await pool.query(
-    `UPDATE shopping_items si
+  const [result] = await pool.query(
+    `DELETE si
+     FROM shopping_items si
      INNER JOIN weeks w ON w.id = si.week_id
-     SET si.is_checked = ?
      WHERE si.id = ? AND w.status = 'active'`,
-    [Boolean(isChecked), parsedId]
+    [parsedId]
   );
+
+  if (result.affectedRows === 0) {
+    const error = new Error('Einkaufslistenpunkt nicht gefunden.');
+    error.statusCode = 404;
+    throw error;
+  }
 
   return getActiveWeek();
 };
 
-export const clearActiveWeek = async () => {
-  const [result] = await pool.query(`DELETE FROM weeks WHERE status = 'active'`);
-  return { deletedWeeks: result.affectedRows };
+export const updateShoppingItemDetails = async ({
+  itemId,
+  name,
+  quantity,
+  unit,
+  category,
+}) => {
+  const parsedId = Number(itemId);
+
+  if (!Number.isInteger(parsedId) || parsedId <= 0) {
+    const error = new Error('Ungültige Einkaufslisten-ID.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [result] = await pool.query(
+    `UPDATE shopping_items si
+     INNER JOIN weeks w ON w.id = si.week_id
+     SET si.name = ?, si.amount = ?, si.category = ?
+     WHERE si.id = ? AND w.status = 'active'`,
+    [
+      name,
+      quantity ?? null,   // 👉 wird zu amount gemappt
+      category ?? 'Sonstiges',
+      parsedId,
+    ]
+  );
+
+  if (result.affectedRows === 0) {
+    const error = new Error('Einkaufslistenpunkt nicht gefunden.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return getActiveWeek();
 };

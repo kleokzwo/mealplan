@@ -1,73 +1,89 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
-const httpClient = {
-  async request(endpoint, options = {}) {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-      ...options,
-    });
+function getToken() {
+  return localStorage.getItem("token");
+}
 
-    const contentType = response.headers.get("content-type") || "";
-    const data = contentType.includes("application/json")
-      ? await response.json().catch(() => null)
-      : await response.text().catch(() => null);
+export function setToken(token) {
+  localStorage.setItem("token", token);
+}
 
-    if (!response.ok) {
-      const error = new Error(
-        (data && typeof data === "object" && data.message) ||
-          response.statusText ||
-          "API Anfrage fehlgeschlagen."
-      );
-      error.status = response.status;
-      error.data = data;
-      error.endpoint = endpoint;
-      throw error;
+export function clearToken() {
+  localStorage.removeItem("token");
+}
+
+async function request(endpoint, options = {}) {
+  const token = getToken();
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : await response.text().catch(() => null);
+
+  if (!response.ok) {
+    // 🔥 optional: Auto-Logout bei 401
+    if (response.status === 401) {
+      localStorage.removeItem("token");
+      // optional redirect:
+      // window.location.href = "/login";
     }
 
-    return data;
-  },
+    const error = new Error(
+      (data && typeof data === "object" && data.message) ||
+        response.statusText ||
+        "API Anfrage fehlgeschlagen."
+    );
+    error.status = response.status;
+    error.data = data;
+    error.endpoint = endpoint;
+    throw error;
+  }
 
-  get(endpoint, options = {}) {
-    return this.request(endpoint, {
-      method: "GET",
-      ...options,
-    });
-  },
+  return data;
+}
 
-  post(endpoint, body, options = {}) {
-    return this.request(endpoint, {
-      method: "POST",
-      body: JSON.stringify(body),
-      ...options,
-    });
-  },
+const httpClient = (endpoint, options = {}) => request(endpoint, options);
 
-  put(endpoint, body, options = {}) {
-    return this.request(endpoint, {
-      method: "PUT",
-      body: JSON.stringify(body),
-      ...options,
-    });
-  },
+httpClient.request = request;
 
-  patch(endpoint, body, options = {}) {
-    return this.request(endpoint, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-      ...options,
-    });
-  },
+httpClient.get = (endpoint, options = {}) =>
+  request(endpoint, { method: "GET", ...options });
 
-  delete(endpoint, options = {}) {
-    return this.request(endpoint, {
-      method: "DELETE",
-      ...options,
-    });
-  },
-};
+httpClient.post = (endpoint, body, options = {}) =>
+  request(endpoint, {
+    method: "POST",
+    body: JSON.stringify(body),
+    ...options,
+  });
+
+httpClient.put = (endpoint, body, options = {}) =>
+  request(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(body),
+    ...options,
+  });
+
+httpClient.patch = (endpoint, body, options = {}) =>
+  request(endpoint, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    ...options,
+  });
+
+httpClient.delete = (endpoint, options = {}) =>
+  request(endpoint, {
+    method: "DELETE",
+    ...options,
+  });
 
 export { httpClient };
 export default httpClient;

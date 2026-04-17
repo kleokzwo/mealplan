@@ -1,4 +1,4 @@
-import { httpClient } from './httpClient';
+import  httpClient  from './httpClient';
 
 const normalizeShoppingItem = (item) => ({
   ...item,
@@ -69,43 +69,23 @@ export const fetchActiveShoppingItems = async () => {
   return items.map(normalizeShoppingItem);
 };
 
-export const setShoppingItemChecked = async ({ itemId, checked }) => {
-  return updateShoppingItem({
-    itemId,
-    isChecked: checked,
-  });
-};
+export async function setShoppingItemChecked({ itemId, checked }) {
+  const response = await httpClient.patch(`/weeks/active/shopping-items/${itemId}`, {
+  isChecked: checked,
+});
 
+  return response?.data ?? response;
+}
 export const updateShoppingItemDetails = async (item) => {
-  return httpClient(`/weeks/active/shopping-items/${item.id}`, {
-    method: 'PUT',
-    body: JSON.stringify({
+  return httpClient.put(`/weeks/active/shopping-items/${item.id}`, {
       name: item.name,
-      quantity: item.quantity ?? '',
-      unit: item.unit ?? '',
-      category: item.category ?? 'Sonstiges',
-    }),
+      quantity: item.quantity,
+      category: item.category,
   });
-};
+}
 
-export async function deleteShoppingItem(id) {
-  const paths = [
-    `/weeks/active/shopping-items/${id}`,
-    `/weeks/active/shopping_items/${id}`,
-    `/shopping-items/${id}`,
-    `/shopping_items/${id}`,
-  ];
+export async function deleteShoppingItem(itemId) {
+  const response = await httpClient.delete(`/weeks/active/shopping-items/${itemId}`)
 
-  for (const path of paths) {
-    try {
-      console.log("TRY DELETE:", path);
-      return await httpClient.delete(path);
-    } catch (err) {
-      if (err.status !== 404) {
-        throw err;
-      }
-    }
-  }
-
-  throw new Error("Delete failed: no valid endpoint");
+  return response?.data ?? response;
 }

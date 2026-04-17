@@ -3,6 +3,8 @@ import {
   getActiveWeek,
   clearActiveWeek,
   updateShoppingItemStatus,
+  deleteShoppingItem,
+  updateShoppingItemDetails
 } from '../services/planService.js';
 
 export const createWeek = async (req, res, next) => {
@@ -56,6 +58,41 @@ export const deleteCurrentWeek = async (_req, res, next) => {
     res.status(200).json({
       message: result.deletedWeeks > 0 ? 'Aktive Woche gelöscht.' : 'Keine aktive Woche zum Löschen gefunden.',
       data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteActiveShoppingItem = async (req, res, next) => {
+  try {
+    const week = await deleteShoppingItem({
+      itemId: req.params.itemId,
+    });
+
+    res.status(200).json({
+      message: 'Einkaufslistenpunkt gelöscht.',
+      data: week,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const updateActiveShoppingItemDetails = async (req, res, next) => {
+  try {
+    const week = await updateShoppingItemDetails({
+      itemId: req.params.itemId,
+      name: req.body.name,
+      quantity: req.body.quantity,
+      unit: req.body.unit,
+      category: req.body.category,
+    });
+
+    res.status(200).json({
+      message: 'Einkaufslistenpunkt aktualisiert.',
+      data: week,
     });
   } catch (error) {
     next(error);
