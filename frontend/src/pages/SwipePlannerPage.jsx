@@ -49,9 +49,10 @@ export default function SwipePlannerPage() {
     dietType: "all",
     maxCookingTime: 25,
   });
+  const [lastSwipeDirection, setLastSwipeDirection] = useState("like");
 
-  const x = useMotionValue(0);
-  const rotate = useTransform(x, [-220, 0, 220], [-12, 0, 12]);
+  //const x = useMotionValue(0);
+  //const rotate = useTransform(x, [-220, 0, 220], [-12, 0, 12]);
 
   useEffect(() => {
     initPage();
@@ -111,7 +112,7 @@ export default function SwipePlannerPage() {
       setMeals(normalized);
       setShowSummary(false);
       setPlanError(normalized.length === 0 ? "Keine passenden Vorschläge gefunden." : "");
-      x.set(0);
+      //x.set(0);
     } catch (error) {
       console.error("Vorschläge konnten nicht geladen werden:", error);
       setMeals([]);
@@ -126,12 +127,13 @@ export default function SwipePlannerPage() {
   function handleDecision(type) {
     if (!activeMeal || isTransitioning) return;
 
-    const swipeOutX = type === "like" ? 320 : -320;
+    setLastSwipeDirection(type);
+    setIsTransitioning(true);
     const nextLikedCount = likedMeals.length + (type === "like" ? 1 : 0);
     const remaining = meals.slice(1);
 
-    setIsTransitioning(true);
-    x.set(swipeOutX);
+
+    //x.set(swipeOutX);
 
     if (type === "like") {
       setLikedMeals((prev) =>
@@ -150,7 +152,7 @@ export default function SwipePlannerPage() {
     }
 
     transitionTimeoutRef.current = setTimeout(() => {
-      x.set(0);
+      //x.set(0);
       setIsTransitioning(false);
 
       if (remaining.length === 0 || nextLikedCount >= TARGET_LIKES) {
@@ -170,7 +172,7 @@ export default function SwipePlannerPage() {
       ];
 
       setIsTransitioning(false);
-      x.set(0);
+      //x.set(0);
 
       await loadSuggestions(preferences, excludeIds);
     } finally {
@@ -186,7 +188,7 @@ export default function SwipePlannerPage() {
       setPlanError("");
       setShowSummary(false);
       setIsTransitioning(false);
-      x.set(0);
+      //x.set(0);
 
       await loadSuggestions(preferences, []);
     } finally {
@@ -310,45 +312,53 @@ export default function SwipePlannerPage() {
           </div>
         </section>
 
-        <div className="relative h-[520px] overflow-hidden rounded-[32px]">
-          {nextMeal && (
-            <div className="pointer-events-none absolute inset-0 z-0 scale-[0.97] opacity-70">
-              <SwipeRecipeCard recipe={nextMeal} />
-            </div>
-          )}
+<div className="relative h-[520px] overflow-hidden rounded-[32px]">
+  {nextMeal && (
+    <SwipeRecipeCard
+      recipe={nextMeal}
+      style={{
+        transform: "scale(0.97)",
+        opacity: 0.7,
+        pointerEvents: "none",
+      }}
+    />
+  )}
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${activeMeal.id || activeMeal.slug || activeMeal.title || "meal"}-${likedMeals.length + rejectedMeals.length}`}
-              drag={isTransitioning ? false : "x"}
-              dragConstraints={{ left: 0, right: 0 }}
-              style={{ x, rotate }}
-              onDragEnd={(_, info) => {
-                if (info.offset.x > SWIPE_THRESHOLD) {
-                  handleDecision("like");
-                } else if (info.offset.x < -SWIPE_THRESHOLD) {
-                  handleDecision("reject");
-                } else {
-                  x.set(0);
-                  setIsTransitioning(false);
-                }
-              }}
-              initial={{ scale: 0.98, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{
-                opacity: 0,
-                x: x.get() > 0 ? 320 : -320,
-                rotate: x.get() > 0 ? 12 : -12,
-              }}
-              transition={{ duration: 0.22 }}
-              className="absolute inset-0 z-10"
-              pointerEvents={isTransitioning ? "none" : "auto"}
-            >
-              <SwipeRecipeCard recipe={activeMeal} />
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
+<AnimatePresence mode="wait">
+  <motion.div
+    key={`${activeMeal.id || activeMeal.slug || activeMeal.title || "meal"}-${likedMeals.length + rejectedMeals.length}`}
+    initial={{ scale: 0.98, opacity: 0 }}
+    animate={{ scale: 1, opacity: 1 }}
+       exit={{
+      opacity: 0,
+      x: lastSwipeDirection === "like" ? 260 : -260,
+      y: 48,
+      rotate: lastSwipeDirection === "like" ? 10 : -10,
+      scale: 0.96,
+    }}
+    transition={{ duration: 0.26, ease: "easeOut" }}
+    className="absolute inset-0 z-10"
+    style={{ pointerEvents: isTransitioning ? "none" : "auto" }}
+  >
+    <SwipeRecipeCard
+      recipe={activeMeal}
+      dragProps={{
+        drag: isTransitioning ? false : "x",
+        dragConstraints: { left: 0, right: 0 },
+        onDragEnd: (_, info) => {
+          if (info.offset.x > SWIPE_THRESHOLD) {
+            handleDecision("like");
+          } else if (info.offset.x < -SWIPE_THRESHOLD) {
+            handleDecision("reject");
+          } else {
+            setIsTransitioning(false);
+          }
+        },
+      }}
+    />
+  </motion.div>
+</AnimatePresence>
+</div>
         <SwipeActionBar
           onReject={() => handleDecision("reject")}
           onLike={() => handleDecision("like")}

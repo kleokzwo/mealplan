@@ -1,12 +1,14 @@
+import { motion } from "framer-motion";
+
 export default function SwipeRecipeCard({ recipe, style = {}, dragProps = {} }) {
   if (!recipe) return null;
 
   return (
-    <div
-      style={style}
-      {...dragProps}
-      className="absolute inset-0 rounded-[32px] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 touch-pan-y"
-    >
+  <motion.div
+    style={style}
+    {...dragProps}
+    className="absolute inset-0 rounded-[32px] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 touch-pan-y"
+  >
       <div className="flex h-full flex-col">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -61,6 +63,6 @@ export default function SwipeRecipeCard({ recipe, style = {}, dragProps = {} }) 
           </p>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

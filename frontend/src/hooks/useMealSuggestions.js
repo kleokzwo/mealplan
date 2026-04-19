@@ -1,27 +1,51 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchMealSuggestions } from '../api/mealApi';
 
-export const useMealSuggestions = (filters) => {
+export const useMealSuggestions = (filters = {}) => {
   const [meals, setMeals] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const safeFilters = useMemo(() => ({
+    householdType: filters?.householdType ?? 'single',
+    dietType: filters?.dietType ?? 'all',
+    maxCookingTime: filters?.maxCookingTime ?? 30,
+    limit: filters?.limit ?? 5,
+    refreshKey: filters?.refreshKey ?? 0,
+  }), [
+    filters?.householdType,
+    filters?.dietType,
+    filters?.maxCookingTime,
+    filters?.limit,
+    filters?.refreshKey,
+  ]);
 
   useEffect(() => {
     const loadSuggestions = async () => {
       try {
         setIsLoading(true);
         setError('');
-        const response = await fetchMealSuggestions(filters);
-        setMeals(response.data || []);
+
+        const response = await fetchMealSuggestions(safeFilters);
+        setMeals(response?.data || []);
+
       } catch (err) {
-        setError(err.message);
+        console.error("MealSuggestions Error:", err);
+        setError(err?.message || 'Rezepte konnten nicht geladen werden.');
+        setMeals([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadSuggestions();
-  }, [filters.householdType, filters.dietType, filters.maxCookingTime, filters.limit, filters.refreshKey]);
+  }, [
+    safeFilters.householdType,
+    safeFilters.dietType,
+    safeFilters.maxCookingTime,
+    safeFilters.limit,
+    safeFilters.refreshKey,
+  ]);
 
   return { meals, isLoading, error };
 };

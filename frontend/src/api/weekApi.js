@@ -1,4 +1,4 @@
-import  httpClient  from './httpClient';
+import httpClient from './httpClient';
 
 const normalizeShoppingItem = (item) => ({
   ...item,
@@ -12,15 +12,123 @@ const normalizeShoppingItem = (item) => ({
   category: item.category ?? 'Sonstiges',
 });
 
+const asArray = (value) => (Array.isArray(value) ? value : []);
+
+const firstArray = (...values) => {
+  for (const value of values) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+};
+
+const normalizeRecipe = (item) => {
+  if (!item) return null;
+
+  const recipe = item.recipe || item.meal || item.menu || item;
+
+  if (!recipe || typeof recipe !== 'object') return null;
+
+  return {
+    ...recipe,
+    id:
+      recipe.id ??
+      recipe.recipeId ??
+      recipe.mealId ??
+      item.recipeId ??
+      item.mealId ??
+      item.id,
+    title:
+      recipe.title ??
+      recipe.name ??
+      recipe.recipeName ??
+      recipe.mealName ??
+      'Unbenanntes Gericht',
+    category: recipe.category ?? recipe.type ?? 'Gericht',
+    cookTime: recipe.cookTime ?? recipe.cookingTime ?? recipe.duration ?? null,
+    difficulty: recipe.difficulty ?? 'einfach',
+    dietType: recipe.dietType ?? recipe.type ?? null,
+  };
+};
+
+const normalizeDay = (day, index) => {
+  const dayName =
+    day?.dayName ??
+    day?.name ??
+    day?.weekday ??
+    day?.label ??
+    null;
+
+  const nestedRecipes = firstArray(
+    day?.recipes,
+    day?.meals,
+    day?.items,
+    day?.entries,
+    day?.plannedMeals
+  )
+    .map(normalizeRecipe)
+    .filter(Boolean);
+
+  const singleRecipe =
+    normalizeRecipe(day?.recipe) ||
+    normalizeRecipe(day?.meal) ||
+    normalizeRecipe(day?.menu);
+
+  return {
+    ...day,
+    id: day?.id ?? day?.dayId ?? `day-${index}`,
+    dayName,
+    date: day?.date ?? day?.plannedDate ?? null,
+    recipe: singleRecipe ?? nestedRecipes[0] ?? null,
+    recipes: nestedRecipes,
+  };
+};
+
+const normalizeWeek = (week) => {
+  const raw = week?.data ?? week ?? {};
+
+  const rawDays = firstArray(
+    raw.days,
+    raw.weekDays,
+    raw.week_days,
+    raw.weeklyPlan,
+    raw.plan,
+    raw.entries,
+    raw.items
+  );
+
+  const normalizedDays = rawDays.map(normalizeDay).filter(Boolean);
+
+  const rawShoppingItems = firstArray(
+    raw.shoppingItems,
+    raw.shoppingList,
+    raw.shopping_items
+  );
+
+  const normalizedMeals = normalizedDays
+    .flatMap((day) => {
+      if (day.recipe) return [day.recipe];
+      return asArray(day.recipes);
+    })
+    .filter(Boolean);
+
+  return {
+    ...raw,
+    days: normalizedDays,
+    normalizedDays,
+    normalizedMeals,
+    selectedMealsCount: normalizedMeals.length,
+    shoppingItems: rawShoppingItems.map(normalizeShoppingItem),
+  };
+};
+
 export const fetchActiveWeek = async () => {
-  return httpClient('/weeks/active');
+  const response = await httpClient('/weeks/active');
+  return normalizeWeek(response);
 };
 
 export const createActiveWeek = async ({ selectedMealIds = [] } = {}) => {
-  return httpClient('/weeks', {
-    method: 'POST',
-    body: JSON.stringify({ selectedMealIds }),
-  });
+  const response = await httpClient.post('/weeks', { selectedMealIds });
+  return normalizeWeek(response);
 };
 
 export async function updateShoppingItem(id, updates) {
@@ -39,7 +147,7 @@ export async function updateShoppingItem(id, updates) {
   for (const path of paths) {
     for (const body of payloads) {
       try {
-        console.log("TRY UPDATE:", path, body);
+        console.log('TRY UPDATE:', path, body);
         return await httpClient.patch(path, body);
       } catch (err) {
         if (err.status !== 404) {
@@ -49,7 +157,7 @@ export async function updateShoppingItem(id, updates) {
     }
   }
 
-  throw new Error("Update failed: no valid endpoint");
+  throw new Error('Update failed: no valid endpoint');
 }
 
 export const deleteActiveWeek = async () => {
@@ -60,32 +168,31 @@ export const deleteActiveWeek = async () => {
 
 export const fetchActiveWeekDays = async () => {
   const week = await fetchActiveWeek();
-  return week?.days ?? week?.weekDays ?? week?.weeklyPlan ?? [];
+  return week?.days ?? [];
 };
 
 export const fetchActiveShoppingItems = async () => {
   const week = await fetchActiveWeek();
-  const items = week?.shoppingItems ?? week?.shoppingList ?? [];
-  return items.map(normalizeShoppingItem);
+  return week?.shoppingItems ?? [];
 };
 
 export async function setShoppingItemChecked({ itemId, checked }) {
   const response = await httpClient.patch(`/weeks/active/shopping-items/${itemId}`, {
-  isChecked: checked,
-});
+    isChecked: checked,
+  });
 
   return response?.data ?? response;
 }
+
 export const updateShoppingItemDetails = async (item) => {
   return httpClient.put(`/weeks/active/shopping-items/${item.id}`, {
-      name: item.name,
-      quantity: item.quantity,
-      category: item.category,
+    name: item.name,
+    quantity: item.quantity,
+    category: item.category,
   });
-}
+};
 
 export async function deleteShoppingItem(itemId) {
-  const response = await httpClient.delete(`/weeks/active/shopping-items/${itemId}`)
-
+  const response = await httpClient.delete(`/weeks/active/shopping-items/${itemId}`);
   return response?.data ?? response;
 }

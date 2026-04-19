@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { getMe } from "./api/userApi";
 
 import LoginPage from "./pages/LoginPage";
@@ -8,11 +9,11 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import HouseholdSetupPage from "./pages/HouseholdSetupPage";
 import MorePage from "./pages/MorePage";
 import TodayPage from "./pages/TodayPage";
-import SwipePlannerPage from './pages/SwipePlannerPage';
-import PlanPage from './pages/PlanPage'
-import ShoppingPage from './pages/ShoppingPage'
-import MobileBottomNav from "./components/MobileBottomNav"
-
+import SwipePlannerPage from "./pages/SwipePlannerPage";
+import PlanPage from "./pages/PlanPage";
+import ShoppingPage from "./pages/ShoppingPage";
+import RecipeDetailPage from "./pages/RecipeDetailPage";
+import MobileBottomNav from "./components/MobileBottomNav";
 
 function SettingsPage() {
   return <div className="p-6">Einstellungen</div>;
@@ -30,9 +31,8 @@ function NotificationSettingsPage() {
   return <div className="p-6">Benachrichtigungen</div>;
 }
 
-
-
 export default function App() {
+  const location = useLocation();
   const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,15 +82,9 @@ export default function App() {
   if (!token) {
     return (
       <Routes>
-        <Route
-          path="/login"
-          element={<LoginPage onAuthSuccess={handleAuthSuccess} />}
-        />
+        <Route path="/login" element={<LoginPage onAuthSuccess={handleAuthSuccess} />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route
-          path="/verify-email"
-          element={<VerifyEmailPage onAuthSuccess={handleAuthSuccess} />}
-        />
+        <Route path="/verify-email" element={<VerifyEmailPage onAuthSuccess={handleAuthSuccess} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -105,24 +99,29 @@ export default function App() {
     );
   }
 
-return (
+  const isRecipeDetailPage = location.pathname.startsWith("/recipe/");
+
+  return (
     <div className="min-h-screen bg-slate-50">
       <main className="pb-24">
-        <Routes>
-          <Route path="/" element={<TodayPage />} />
-          <Route path="/swipe" element={<SwipePlannerPage />} />
-          <Route path="/plan" element={<PlanPage />} />
-          <Route path="/shopping" element={<ShoppingPage />} />
-          <Route path="/more" element={<MorePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/family" element={<FamilyPage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
-        </Routes>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<TodayPage />} />
+            <Route path="/swipe" element={<SwipePlannerPage />} />
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/shopping" element={<ShoppingPage />} />
+            <Route path="/more" element={<MorePage />} />
+            <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/family" element={<FamilyPage />} />
+            <Route path="/help" element={<HelpPage />} />
+            <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AnimatePresence>
       </main>
 
-      <MobileBottomNav />
+      {!isRecipeDetailPage ? <MobileBottomNav onLogout={handleLogout} /> : null}
     </div>
-);
+  );
 }

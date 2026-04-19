@@ -2,11 +2,14 @@ import { motion, useMotionValue, useTransform } from 'framer-motion';
 
 const SWIPE_THRESHOLD = 110;
 
-function SwipeRecipeCard({ meal, onLike, onSkip }) {
+export default function SwipeRecipeCard({ meal, recipe, onLike, onSkip }) {
+  const item = meal || recipe;
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-220, 220], [-12, 12]);
   const likeOpacity = useTransform(x, [0, 60, 140], [0, 0.4, 1]);
   const skipOpacity = useTransform(x, [-140, -60, 0], [1, 0.4, 0]);
+
+  if (!item) return null;
 
   const handleDragEnd = (_, info) => {
     if (info.offset.x > SWIPE_THRESHOLD) {
@@ -40,10 +43,10 @@ function SwipeRecipeCard({ meal, onLike, onSkip }) {
       </motion.div>
 
       <div className="card-media">
-        <span className="meal-badge">{meal.category}</span>
+        <span className="meal-badge">{item.category}</span>
         <div className="card-media-overlay">
-          <p className="meal-type">{meal.dietType}</p>
-          <h3>{meal.title}</h3>
+          <p className="meal-type">{item.dietType}</p>
+          <h3>{item.title}</h3>
         </div>
       </div>
 
@@ -51,19 +54,19 @@ function SwipeRecipeCard({ meal, onLike, onSkip }) {
         <div className="meal-meta-grid">
           <div>
             <span className="meta-label">Kochzeit</span>
-            <strong>{meal.cookingTimeMinutes} Min.</strong>
+            <strong>{item.cookingTimeMinutes} Min.</strong>
           </div>
           <div>
             <span className="meta-label">Schwierigkeit</span>
-            <strong>{meal.difficulty}</strong>
+            <strong>{item.difficulty}</strong>
           </div>
           <div>
             <span className="meta-label">Haushalt</span>
-            <strong>{meal.householdFit || 'familienfreundlich'}</strong>
+            <strong>{item.householdFit || 'familienfreundlich'}</strong>
           </div>
           <div>
             <span className="meta-label">Ideal für</span>
-            <strong>{meal.familyFit || 'Alltag'}</strong>
+            <strong>{item.familyFit || 'Alltag'}</strong>
           </div>
         </div>
 
@@ -74,5 +77,3 @@ function SwipeRecipeCard({ meal, onLike, onSkip }) {
     </motion.article>
   );
 }
-
-export default SwipeRecipeCard;

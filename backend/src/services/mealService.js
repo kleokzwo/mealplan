@@ -1,5 +1,20 @@
 import { pool } from '../config/db.js';
 
+const normalizeHouseholdType = (householdType) => {
+  if (!householdType) return 'familie';
+
+  const value = String(householdType).toLowerCase().trim();
+
+  if (value === 'family') return 'familie';
+  if (value === 'familie') return 'familie';
+  if (value === 'single') return 'single';
+  if (value === 'paar') return 'paar';
+  if (value === 'couple') return 'paar';
+
+  return householdType;
+};
+
+
 const normalizeMeal = (row) => ({
   ...row,
   familyFriendly: Boolean(row.familyFriendly),
@@ -30,6 +45,7 @@ const buildFilterQuery = ({ householdType, dietType, maxCookingTime }) => {
   return { query, params };
 };
 
+
 const scoreMeal = (meal, householdType) => {
   let score = 0;
 
@@ -59,6 +75,7 @@ const scoreMeal = (meal, householdType) => {
 
   return score;
 };
+
 
 const diversifyMeals = (meals, limit) => {
   const selected = [];
@@ -100,8 +117,19 @@ const diversifyMeals = (meals, limit) => {
   return selected;
 };
 
-export const getMealSuggestions = async ({ householdType = 'familie', dietType = 'all', maxCookingTime = 25, limit = 5 }) => {
-  const filters = buildFilterQuery({ householdType, dietType, maxCookingTime });
+export const getMealSuggestions = async ({
+  householdType = 'familie',
+  dietType = 'all',
+  maxCookingTime = 25,
+  limit = 5,
+}) => {
+  const normalizedHouseholdType = normalizeHouseholdType(householdType);
+
+  const filters = buildFilterQuery({
+    householdType: normalizedHouseholdType,
+    dietType,
+    maxCookingTime,
+  });
 
   const [rows] = await pool.query(filters.query, filters.params);
   const normalizedRows = rows.map(normalizeMeal);
@@ -109,7 +137,7 @@ export const getMealSuggestions = async ({ householdType = 'familie', dietType =
   const sorted = normalizedRows
     .map((meal) => ({
       ...meal,
-      score: scoreMeal(meal, householdType),
+      score: scoreMeal(meal, normalizedHouseholdType),
     }))
     .sort((a, b) => {
       if (b.score !== a.score) {
@@ -122,4 +150,14 @@ export const getMealSuggestions = async ({ householdType = 'familie', dietType =
     });
 
   return diversifyMeals(sorted, limit);
+};
+
+// ✅ nur Erweiterung: bequemer Wrapper für User-Objekte
+export const getMealSuggestionsForUser = async (user, options = {}) => {
+  return getMealSuggestions({
+    householdType: user?.householdType || user?.household_type || 'familie',
+    dietType: user?.dietType || user?.diet_type || 'all',
+    maxCookingTime: options.maxCookingTime || user?.maxCookingTime || 25,
+    limit: options.limit || 5,
+  });
 };

@@ -86,12 +86,6 @@ export default function ShoppingListItem({
           >
             {item.name}
           </p>
-
-          {(item.quantity || item.unit) && (
-            <p className="mt-1 text-sm text-slate-500">
-              {[item.quantity, item.unit].filter(Boolean).join(" | ")}
-            </p>
-          )}
         </div>
 
         {(item.quantity || item.unit) && (
