@@ -6,13 +6,15 @@ export const useMealSuggestions = (filters = {}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const safeFilters = useMemo(() => ({
-    householdType: filters?.householdType ?? 'single',
-    dietType: filters?.dietType ?? 'all',
-    maxCookingTime: filters?.maxCookingTime ?? 30,
-    limit: filters?.limit ?? 5,
-    refreshKey: filters?.refreshKey ?? 0,
-  }), [
+  const safeFilters = useMemo(() => {
+    return {
+      householdType: filters?.householdType ?? 'single',
+      dietType: filters?.dietType ?? 'all',
+      maxCookingTime: filters?.maxCookingTime ?? 30,
+      limit: filters?.limit ?? 5,
+      refreshKey: filters?.refreshKey ?? 0,
+    };
+  }, [
     filters?.householdType,
     filters?.dietType,
     filters?.maxCookingTime,
@@ -27,11 +29,14 @@ export const useMealSuggestions = (filters = {}) => {
         setError('');
 
         const response = await fetchMealSuggestions(safeFilters);
-        setMeals(response?.data || []);
+
+        // defensive: API kann data oder direkt array zurückgeben
+        const data = response?.data ?? response ?? [];
+        setMeals(Array.isArray(data) ? data : []);
 
       } catch (err) {
-        console.error("MealSuggestions Error:", err);
-        setError(err?.message || 'Rezepte konnten nicht geladen werden.');
+        console.error('MealSuggestions Error:', err);
+        setError('Rezepte konnten nicht geladen werden.');
         setMeals([]);
       } finally {
         setIsLoading(false);

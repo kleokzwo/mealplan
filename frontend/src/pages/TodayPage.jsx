@@ -1,371 +1,391 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  CalendarDays,
-  ShoppingCart,
-  ChefHat,
-  Heart,
-  RefreshCw,
-  X,
-  Clock3,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  createActiveWeek,
-  deleteActiveWeek,
-  fetchActiveWeek,
-} from "../api/weekApi";
-import { useMealSuggestions } from "../hooks/useMealSuggestions";
+import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion';
+import { ChefHat, Heart, RefreshCw, RotateCcw, ShoppingCart, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { createActiveWeek, deleteActiveWeek, fetchActiveWeek } from '../api/weekApi';
+import { useMealSuggestions } from '../hooks/useMealSuggestions';
 
-function normalizeShoppingItems(week) {
+const SWIPE_THRESHOLD = 110;
+const VELOCITY_THRESHOLD = 650;
+const MIN_SELECTIONS = 3;
+const TARGET_SELECTIONS = 5;
+
+const normalizeDays = (week) => {
+  if (!week) return [];
+  const raw = week?.data ?? week;
   const candidates = [
-    week?.shoppingItems,
-    week?.shoppingList,
-    week?.shopping_items,
-    week?.data?.shoppingItems,
-    week?.data?.shoppingList,
-    week?.data?.shopping_items,
+    raw?.days,
+    raw?.weekDays,
+    raw?.week_days,
+    raw?.weeklyPlan,
+    raw?.plan,
+    raw?.entries,
+    raw?.items,
   ];
+  return candidates.find(Array.isArray) ?? [];
+};
 
-  const firstArray = candidates.find((candidate) => Array.isArray(candidate));
-  return firstArray || [];
-}
+const normalizeShopping = (week) => {
+  if (!week) return [];
+  const raw = week?.data ?? week;
+  const candidates = [raw?.shoppingItems, raw?.shoppingList, raw?.shopping_items];
+  const items = candidates.find(Array.isArray) ?? [];
+  return items.map((item) => ({
+    ...item,
+    isChecked: item?.isChecked ?? item?.checked ?? false,
+    checked: item?.checked ?? item?.isChecked ?? false,
+  }));
+};
 
-function normalizeDays(week) {
-  const candidates = [
-    week?.days,
-    week?.weekDays,
-    week?.week_days,
-    week?.weeklyPlan,
-    week?.plan,
-    week?.entries,
-    week?.items,
-    week?.data?.days,
-    week?.data?.weekDays,
-    week?.data?.week_days,
-    week?.data?.weeklyPlan,
-    week?.data?.plan,
-    week?.data?.entries,
-    week?.data?.items,
-  ];
+const getMealFromDay = (day) =>
+  day?.recipe ?? day?.meal ?? day?.menu ?? day?.recipes?.[0] ?? day?.meals?.[0] ?? null;
 
-  const firstArray = candidates.find((candidate) => Array.isArray(candidate));
-  return firstArray || [];
-}
+const getMealId = (meal) => meal?.id ?? meal?.mealId ?? meal?.recipeId ?? null;
+const getMealTitle = (meal) => meal?.title ?? meal?.name ?? meal?.mealName ?? meal?.recipeName ?? 'Rezept';
+const getMealCategory = (meal) => meal?.category ?? meal?.type ?? 'Gericht';
+const getMealDifficulty = (meal) => meal?.difficulty ?? 'einfach';
+const getMealType = (meal) => meal?.dietType ?? meal?.diet_type ?? meal?.type ?? '—';
+const getMealTime = (meal) => meal?.cookTime ?? meal?.cooking_time_minutes ?? meal?.cookingTime ?? null;
+const getMealImage = (meal) => meal?.image_url ?? meal?.imageUrl ?? meal?.image ?? null;
 
-function getMealTitle(meal) {
+const reasonsForMeal = (meal) => {
+  const out = [];
+  const time = getMealTime(meal);
+  if (time && Number.isFinite(Number(time))) out.push('Schnell genug für euren Alltag');
+  if (meal?.family_friendly || meal?.familyFriendly) out.push('Familienfreundlich');
+  out.push('Passt zu euren Präferenzen');
+  out.push('Gut für den Wochenplan');
+  return out.slice(0, 2);
+};
+
+function MetricPill({ label, value }) {
   return (
-    meal?.title ||
-    meal?.name ||
-    meal?.recipeName ||
-    meal?.mealName ||
-    meal?.recipe?.title ||
-    meal?.meal?.title ||
-    "Unbenanntes Rezept"
+    <div className="rounded-2xl bg-white/88 px-3 py-2 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">{label}</p>
+      <p className="mt-1 text-[14px] font-semibold text-slate-900">{value}</p>
+    </div>
   );
-}
-
-function getMealCategory(meal) {
-  return meal?.category || meal?.type || meal?.recipe?.category || "Gericht";
-}
-
-function getMealDifficulty(meal) {
-  return meal?.difficulty || meal?.recipe?.difficulty || "Einfach";
-}
-
-function getMealDiet(meal) {
-  return meal?.dietType || meal?.diet_type || meal?.type || meal?.recipe?.dietType || "-";
-}
-
-function getMealTime(meal) {
-  return (
-    meal?.cookTime ||
-    meal?.cooking_time_minutes ||
-    meal?.cookingTime ||
-    meal?.recipe?.cookTime ||
-    meal?.recipe?.cooking_time_minutes ||
-    null
-  );
-}
-
-function getMealImage(meal) {
-  return meal?.image_url || meal?.imageUrl || meal?.image || meal?.recipe?.image_url || null;
-}
-
-function getMealId(meal) {
-  return meal?.id ?? meal?.mealId ?? meal?.recipeId ?? meal?.recipe?.id ?? null;
 }
 
 function EmptySwipeState({ onWeekCreated }) {
-  const navigate = useNavigate();
+  const [visibleMeals, setVisibleMeals] = useState([]);
+  const [batch, setBatch] = useState(0);
   const [cardIndex, setCardIndex] = useState(0);
-  const [direction, setDirection] = useState(0);
-  const [dragX, setDragX] = useState(0);
+  const [exitDirection, setExitDirection] = useState(0);
   const [likedMealIds, setLikedMealIds] = useState([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const swipeThreshold = 110;
+  const [creating, setCreating] = useState(false);
+  const [localError, setLocalError] = useState('');
+
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-220, 0, 220], [-16, 0, 16]);
+  const y = useTransform(x, [-220, 0, 220], [14, 0, 14]);
+  const likeOpacity = useTransform(x, [24, 120], [0, 1]);
+  const nopeOpacity = useTransform(x, [-120, -24], [1, 0]);
 
   const { meals = [], isLoading, error } = useMealSuggestions({
-    householdType: "single",
-    dietType: "all",
+    householdType: 'single',
+    dietType: 'all',
     maxCookingTime: 30,
     limit: 5,
-    refreshKey: 0,
+    refreshKey: batch,
   });
 
-  const deckMeals = meals.slice(0, 5);
-  const currentMeal = deckMeals[cardIndex] || null;
-  const isDeckFinished = deckMeals.length > 0 && cardIndex >= deckMeals.length;
+  useEffect(() => {
+    const nextBatch = Array.isArray(meals) ? meals.filter(Boolean) : [];
+    setVisibleMeals(nextBatch);
+    setCardIndex(0);
+    setExitDirection(0);
+    setLocalError('');
+    x.set(0);
+  }, [meals, batch, x]);
 
-  const cardVariants = {
-    enter: (dir) => ({
-      x: dir > 0 ? 320 : -320,
-      opacity: 0,
-      scale: 0.97,
-      rotate: dir > 0 ? 6 : -6,
-    }),
-    center: {
-      x: 0,
-      y: 0,
-      opacity: 1,
-      scale: 1,
-      rotate: 0,
-    },
-    exit: (dir) => ({
-      x: dir > 0 ? 460 : -460,
-      y: 24,
-      opacity: 0,
-      rotate: dir > 0 ? 12 : -12,
-      transition: { duration: 0.22 },
-    }),
-  };
+  const activeMeal = visibleMeals[cardIndex] ?? null;
+  const selectedCount = likedMealIds.length;
+  const image = getMealImage(activeMeal);
 
-  const finishSelection = async (nextLikedIds) => {
-    if (nextLikedIds.length < 5 || isSaving) return;
+  const finishWeek = async (mealIds) => {
+    if (creating) return;
+    if (!mealIds.length || mealIds.length < MIN_SELECTIONS) {
+      setLocalError(`Bitte wähle mindestens ${MIN_SELECTIONS} Gerichte.`);
+      return;
+    }
 
     try {
-      setIsSaving(true);
-      const createdWeek = await createActiveWeek({ selectedMealIds: nextLikedIds });
-      onWeekCreated(createdWeek);
-    } catch (saveError) {
-      console.error("Aktive Woche konnte nicht erstellt werden:", saveError);
+      setCreating(true);
+      setLocalError('');
+      await createActiveWeek({ selectedMealIds: mealIds });
+      await onWeekCreated?.();
+    } catch (err) {
+      console.error('Fehler beim Erstellen der Woche:', err);
+      setLocalError('Die Woche konnte gerade nicht erstellt werden.');
     } finally {
-      setIsSaving(false);
+      setCreating(false);
     }
   };
 
-  const moveToNextCard = (dir) => {
-    setDirection(dir);
-    setDragX(0);
-    setCardIndex((prev) => prev + 1);
-  };
+  const showNextBatch = () => setBatch((prev) => prev + 1);
 
   const handleLike = async () => {
-    if (!currentMeal || isSaving) return;
+    if (!activeMeal || creating) return;
 
-    const mealId = getMealId(currentMeal);
-    if (!mealId) {
-      moveToNextCard(1);
-      return;
-    }
-
-    const nextLikedIds = likedMealIds.includes(mealId)
-      ? likedMealIds
-      : [...likedMealIds, mealId];
+    const mealId = getMealId(activeMeal);
+    const nextLikedIds =
+      mealId && !likedMealIds.includes(mealId) ? [...likedMealIds, mealId] : likedMealIds;
 
     setLikedMealIds(nextLikedIds);
+    setExitDirection(1);
 
-    if (nextLikedIds.length >= 5) {
-      setDirection(1);
-      await finishSelection(nextLikedIds);
+    if (nextLikedIds.length >= TARGET_SELECTIONS) {
+      await finishWeek(nextLikedIds);
       return;
     }
 
-    moveToNextCard(1);
+    const nextIndex = cardIndex + 1;
+    if (nextIndex >= visibleMeals.length) {
+      if (nextLikedIds.length >= MIN_SELECTIONS) {
+        await finishWeek(nextLikedIds);
+      } else {
+        showNextBatch();
+      }
+      return;
+    }
+
+    setCardIndex(nextIndex);
+    x.set(0);
   };
 
   const handleReject = () => {
-    if (!currentMeal || isSaving) return;
-    moveToNextCard(-1);
+    if (!activeMeal || creating) return;
+    setExitDirection(-1);
+
+    const nextIndex = cardIndex + 1;
+    if (nextIndex >= visibleMeals.length) {
+      if (likedMealIds.length >= MIN_SELECTIONS) {
+        return;
+      }
+      showNextBatch();
+      return;
+    }
+    setCardIndex(nextIndex);
+    x.set(0);
   };
 
-  const handleRefresh = () => {
-    navigate("/swipe");
+  const handleReload = () => {
+    if (creating) return;
+    showNextBatch();
   };
 
   const handleDragEnd = async (_, info) => {
-    const offset = info.offset.x;
-    const velocity = info.velocity.x;
+    const offsetX = info.offset.x;
+    const velocityX = info.velocity.x;
 
-    if (offset > swipeThreshold || velocity > 500) {
+    if (offsetX > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
       await handleLike();
       return;
     }
 
-    if (offset < -swipeThreshold || velocity < -500) {
+    if (offsetX < -SWIPE_THRESHOLD || velocityX < -VELOCITY_THRESHOLD) {
       handleReject();
       return;
     }
 
-    setDragX(0);
+    x.set(0);
   };
 
-  const image = getMealImage(currentMeal);
-  const rotation = dragX * 0.04;
+  if (isLoading && !activeMeal) return <div className="min-h-screen bg-slate-50" />;
 
-  if (isLoading || isSaving) {
+  if (error && !activeMeal) {
     return (
       <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm text-slate-500">
-            {isSaving ? "Auswahl wird gespeichert..." : "Rezepte werden geladen..."}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !deckMeals.length) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm text-slate-500">{error}</p>
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <h2 className="text-2xl font-bold text-slate-900">Vorschläge konnten nicht geladen werden.</h2>
           <button
             type="button"
-            onClick={() => navigate("/swipe")}
-            className="mt-4 w-full rounded-2xl bg-slate-900 px-5 py-4 text-base font-semibold text-white"
+            onClick={handleReload}
+            className="mt-5 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
           >
-            Zum Swipe Planner
+            Nochmal versuchen
           </button>
         </div>
       </div>
     );
   }
 
-  if (isDeckFinished || !currentMeal) {
+  if (!activeMeal && likedMealIds.length < MIN_SELECTIONS) {
     return (
       <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <p className="text-lg font-semibold text-slate-900">Noch nicht genug Rezepte ausgewählt.</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Du hast {likedMealIds.length} von 5 Rezepten geliked. Für die Einkaufsliste brauchen wir 5 Menüs.
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Weiter auswählen</p>
+          <h2 className="mt-3 text-3xl font-bold text-slate-900">Noch nicht genug dabei.</h2>
+          <p className="mt-3 text-base leading-7 text-slate-500">
+            Du hast bisher {likedMealIds.length} von mindestens {MIN_SELECTIONS} Gerichten ausgewählt.
           </p>
           <button
             type="button"
-            onClick={() => navigate("/swipe")}
-            className="mt-4 w-full rounded-2xl bg-slate-900 px-5 py-4 text-base font-semibold text-white"
+            onClick={handleReload}
+            className="mt-6 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
           >
-            Weitere Rezepte swipen
+            5 neue Vorschläge
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeMeal && likedMealIds.length >= MIN_SELECTIONS) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Fast fertig</p>
+          <h2 className="mt-3 text-3xl font-bold text-slate-900">Auswahl speichern?</h2>
+          <p className="mt-3 text-base leading-7 text-slate-500">
+            {likedMealIds.length} Gerichte sind ausgewählt. Du kannst jetzt speichern oder noch weiter suchen.
+          </p>
+          <div className="mt-6 space-y-3">
+            <button
+              type="button"
+              onClick={() => finishWeek(likedMealIds)}
+              disabled={creating}
+              className="w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white disabled:opacity-60"
+            >
+              {creating ? 'Wird gespeichert...' : 'Auswahl speichern'}
+            </button>
+            <button
+              type="button"
+              onClick={handleReload}
+              disabled={creating}
+              className="w-full rounded-[22px] bg-white px-5 py-4 text-base font-semibold text-slate-700 ring-1 ring-slate-200 disabled:opacity-60"
+            >
+              5 weitere Vorschläge
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+    <div className="min-h-screen bg-slate-50 px-4 pt-5 pb-28">
       <div className="mx-auto max-w-md">
-        <div className="relative h-[560px]">
-          <AnimatePresence mode="wait" custom={direction}>
-            <motion.div
-              key={`${getMealId(currentMeal) || cardIndex}`}
-              custom={direction}
-              variants={cardVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        <div className="mb-3 flex items-center justify-between px-1 text-sm font-semibold text-slate-500">
+          <span>{selectedCount}/{TARGET_SELECTIONS} gewählt</span>
+          <span>mind. {MIN_SELECTIONS}</span>
+        </div>
+
+        <div className="relative h-[520px]">
+          <AnimatePresence initial={false} custom={exitDirection} mode="wait">
+            <motion.article
+              key={`${getMealId(activeMeal) ?? cardIndex}-${batch}`}
+              custom={exitDirection}
+              initial={(dir) => ({
+                x: dir >= 0 ? 260 : -260,
+                y: 10,
+                opacity: 0,
+                scale: 0.97,
+                rotate: dir >= 0 ? 8 : -8,
+              })}
+              animate={{ x: 0, y: 0, opacity: 1, scale: 1, rotate: 0 }}
+              exit={(dir) => ({
+                x: dir >= 0 ? 520 : -520,
+                y: 40,
+                opacity: 0,
+                rotate: dir >= 0 ? 18 : -18,
+                transition: { duration: 0.22, ease: 'easeOut' },
+              })}
+              transition={{ type: 'spring', stiffness: 330, damping: 28, mass: 0.9 }}
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.16}
-              onDrag={(_, info) => setDragX(info.offset.x)}
+              dragElastic={0.14}
+              style={{ x, rotate, y }}
               onDragEnd={handleDragEnd}
-              style={{ rotate: `${rotation}deg` }}
-              className="absolute inset-0 touch-pan-y"
+              className="relative overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#f7f3ff_0%,#f8f8fb_42%,#ffffff_100%)] px-5 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/70"
             >
-              <article className="flex h-full flex-col overflow-hidden rounded-[34px] bg-white shadow-[0_16px_60px_rgba(15,23,42,0.10)] ring-1 ring-slate-200">
-                <div className="relative h-[360px] w-full overflow-hidden bg-slate-100">
-                  {image ? (
-                    <img
-                      src={image}
-                      alt={getMealTitle(currentMeal)}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-200 via-rose-100 to-lime-100">
-                      <ChefHat className="h-14 w-14 text-slate-700" />
-                    </div>
-                  )}
-
-                  <div className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-800 backdrop-blur">
-                    {getMealCategory(currentMeal)}
-                  </div>
-
-                  <div className="absolute right-4 top-4 rounded-full bg-slate-900/85 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
-                    {likedMealIds.length}/5 gewählt
-                  </div>
+              {image ? (
+                <div className="mb-4 h-[140px] overflow-hidden rounded-[24px] bg-slate-200">
+                  <img src={image} alt={getMealTitle(activeMeal)} className="h-full w-full object-cover" />
                 </div>
+              ) : (
+                <div className="mb-4 h-[140px] rounded-[24px] bg-[linear-gradient(135deg,#d8ccff_0%,#f6ebff_45%,#ffeccf_100%)]" />
+              )}
 
-                <div className="flex flex-1 flex-col p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h1 className="text-3xl font-bold leading-tight text-slate-900">
-                        {getMealTitle(currentMeal)}
-                      </h1>
-                      <p className="mt-2 text-sm text-slate-500">{getMealDiet(currentMeal)}</p>
-                    </div>
-                  </div>
+              <motion.div
+                style={{ opacity: nopeOpacity }}
+                className="pointer-events-none absolute left-4 top-4 rounded-2xl border-2 border-rose-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-rose-500"
+              >
+                Nein
+              </motion.div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-orange-50 p-3">
-                      <p className="text-xs text-slate-500">Dauer</p>
-                      <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <Clock3 className="h-4 w-4" />
-                        <span>{getMealTime(currentMeal) ? `${getMealTime(currentMeal)} Min.` : "Flexibel"}</span>
-                      </div>
-                    </div>
+              <motion.div
+                style={{ opacity: likeOpacity }}
+                className="pointer-events-none absolute right-4 top-4 rounded-2xl border-2 border-emerald-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-600"
+              >
+                Passt
+              </motion.div>
 
-                    <div className="rounded-2xl bg-lime-50 p-3">
-                      <p className="text-xs text-slate-500">Level</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">{getMealDifficulty(currentMeal)}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-auto pt-5 text-center text-sm text-slate-400">
-                    Rechts = behalten, links = überspringen
-                  </div>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-500">Vorschlag</p>
+                  <h1 className="mt-3 max-w-[220px] text-[22px] font-bold leading-tight text-slate-900">
+                    {getMealTitle(activeMeal)}
+                  </h1>
                 </div>
-              </article>
-            </motion.div>
+                <span className="mt-8 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600">
+                  {getMealCategory(activeMeal)}
+                </span>
+              </div>
+
+              <div className="mt-5 grid grid-cols-3 gap-2.5">
+                <MetricPill
+                  label="Zeit"
+                  value={getMealTime(activeMeal) ? `${getMealTime(activeMeal)} Min.` : '- Min.'}
+                />
+                <MetricPill label="Level" value={getMealDifficulty(activeMeal)} />
+                <MetricPill label="Typ" value={getMealType(activeMeal)} />
+              </div>
+
+              <div className="mt-5">
+                <h2 className="text-[18px] font-bold text-slate-900">Warum das passt</h2>
+                <ul className="mt-3 space-y-3 text-[15px] leading-7 text-slate-500">
+                  {reasonsForMeal(activeMeal).map((reason) => (
+                    <li key={reason}>• {reason}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="mt-5 text-xs text-slate-400">Links = nein · Rechts = passt</p>
+            </motion.article>
           </AnimatePresence>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-5">
+        <div className="mt-4 flex items-center justify-center gap-4">
           <button
             type="button"
             onClick={handleReject}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200"
-            aria-label="Nach links"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200"
+            aria-label="Ablehnen"
           >
-            <X className="h-7 w-7" />
+            <X className="h-6 w-6" />
           </button>
           <button
             type="button"
-            onClick={handleRefresh}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200"
-            aria-label="Mehr Rezepte"
+            onClick={handleReload}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200"
+            aria-label="Neue Vorschläge laden"
           >
-            <RefreshCw className="h-7 w-7" />
+            <RefreshCw className="h-5 w-5" />
           </button>
           <button
             type="button"
             onClick={handleLike}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm"
-            aria-label="Rezept behalten"
+            disabled={creating}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] disabled:opacity-60"
+            aria-label="Gefällt mir"
           >
-            <Heart className="h-7 w-7" />
+            <Heart className="h-7 w-7 fill-current" />
           </button>
         </div>
+
+        {localError ? <p className="mt-3 text-center text-sm font-medium text-rose-500">{localError}</p> : null}
       </div>
     </div>
   );
@@ -374,150 +394,125 @@ function EmptySwipeState({ onWeekCreated }) {
 export default function TodayPage() {
   const navigate = useNavigate();
   const [week, setWeek] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingWeek, setLoadingWeek] = useState(true);
   const [resetting, setResetting] = useState(false);
 
-  useEffect(() => {
-    const loadWeek = async () => {
-      try {
-        const data = await fetchActiveWeek();
-        setWeek(data || null);
-      } catch (error) {
-        setWeek(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadWeek = async () => {
+    try {
+      setLoadingWeek(true);
+      const result = await fetchActiveWeek();
+      setWeek(result);
+    } catch (err) {
+      console.error('Fehler beim Laden der Woche:', err);
+      setWeek(null);
+    } finally {
+      setLoadingWeek(false);
+    }
+  };
 
+  useEffect(() => {
     loadWeek();
   }, []);
 
-  const days = normalizeDays(week);
-  const shoppingItems = normalizeShoppingItems(week);
-  const hasOpenShopping = shoppingItems.some((item) => !(item?.checked ?? item?.isChecked ?? false));
+  const days = useMemo(() => normalizeDays(week), [week]);
+  const shoppingItems = useMemo(() => normalizeShopping(week), [week]);
+  const checkedItems = shoppingItems.filter((item) => item?.isChecked || item?.checked).length;
+  const openItems = Math.max(shoppingItems.length - checkedItems, 0);
+  const todayMeal = getMealFromDay(days[0]);
   const hasContent = days.length > 0 || shoppingItems.length > 0;
-
-  const todayMeal = days[0]?.recipe || days[0]?.meal || days[0]?.menu || days[0] || null;
-
-  const checkedItems = shoppingItems.filter(
-    (item) => item?.checked ?? item?.isChecked ?? false
-  ).length;
-
-  const progressText = useMemo(() => {
-    return `${days.length}/${Math.max(days.length, 5)} Tage`;
-  }, [days.length]);
-
-  const handleOpenPlanner = () => navigate("/swipe");
 
   const handleResetWeek = async () => {
     try {
       setResetting(true);
       await deleteActiveWeek();
-      setWeek(null);
+      await loadWeek();
     } catch (error) {
-      console.error("Aktive Woche konnte nicht gelöscht werden:", error);
+      console.error('Fehler beim Zurücksetzen der Woche:', error);
     } finally {
       setResetting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm text-slate-500">Lade deinen Tagesüberblick...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!hasContent) {
-    return <EmptySwipeState onWeekCreated={setWeek} />;
-  }
+  if (loadingWeek) return <div className="min-h-screen bg-slate-50" />;
+  if (!hasContent) return <EmptySwipeState onWeekCreated={loadWeek} />;
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-      <div className="mx-auto max-w-md space-y-5">
-        <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Heute</p>
-          <h1 className="mt-3 text-4xl font-bold tracking-tight text-slate-900">Deine Woche ist bereit.</h1>
-          <p className="mt-4 text-base leading-7 text-slate-600">Wenig denken, direkt loslegen.</p>
-        </section>
-
-        <section className="rounded-[28px] bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mx-auto max-w-md space-y-4">
+        <section className="overflow-hidden rounded-[32px] bg-[linear-gradient(135deg,#f5f0ff_0%,#f8f5ef_100%)] p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Heute zu tun</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-900">Wenig denken, direkt loslegen</h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Heute</p>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+                {todayMeal ? getMealTitle(todayMeal) : 'Deine Woche ist bereit'}
+              </h1>
+              <p className="mt-3 text-base text-slate-500">
+                {todayMeal ? 'Das ist heute dran.' : 'Alles Nötige ist schon da.'}
+              </p>
             </div>
-            <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">{progressText}</div>
-          </div>
-
-          <div className="space-y-3">
-            {(shoppingItems.length > 0 || hasOpenShopping) && (
-              <button
-                type="button"
-                onClick={() => navigate("/shopping")}
-                className="flex w-full items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <ShoppingCart className="h-5 w-5 text-slate-500" />
-                  <span className="text-lg font-semibold text-slate-900">Einkauf prüfen</span>
-                </div>
-                <span className="text-base text-slate-500">{checkedItems}/{shoppingItems.length} Artikel erledigt.</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => navigate("/plan")}
-              className="flex w-full items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left"
-            >
-              <div className="flex items-center gap-3">
-                <ChefHat className="h-5 w-5 text-slate-500" />
-                <span className="text-lg font-semibold text-slate-900">Kochen einplanen</span>
-              </div>
-              <span className="max-w-[140px] text-right text-base text-slate-500">{getMealTitle(todayMeal)}</span>
-            </button>
+            <div className="rounded-[24px] bg-white/85 px-4 py-3 text-center shadow-sm ring-1 ring-slate-200/70 backdrop-blur">
+              <div className="text-xl font-bold text-emerald-600">{days.length}/5</div>
+              <div className="text-xs text-slate-500">geplant</div>
+            </div>
           </div>
         </section>
-
-        <section onClick={() => navigate("/plan")} className="cursor-pointer rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Diese Woche</p>
-          <h2 className="mt-3 text-2xl font-bold text-slate-900">Dein Essensplan</h2>
-          <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-            <CalendarDays className="h-4 w-4" />
-            <span>{days.length} Gerichte ausgewählt</span>
-          </div>
-        </section>
-
-        {shoppingItems.length > 0 && (
-          <section onClick={() => navigate("/shopping")} className="cursor-pointer rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Einkauf</p>
-                <h2 className="mt-3 text-2xl font-bold text-slate-900">Die Liste für diese Woche</h2>
-              </div>
-              <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">{checkedItems}/{shoppingItems.length}</div>
-            </div>
-          </section>
-        )}
 
         <button
           type="button"
-          onClick={handleOpenPlanner}
-          className="w-full rounded-2xl bg-slate-900 px-5 py-4 text-base font-semibold text-white shadow-sm transition active:scale-[0.99]"
+          onClick={() => navigate('/plan')}
+          className="flex w-full items-center justify-between rounded-[28px] bg-slate-950 px-5 py-5 text-left text-white shadow-[0_14px_30px_rgba(2,6,23,0.22)]"
         >
-          Woche weiterplanen
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-white/10 p-3">
+              <ChefHat className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold">Jetzt kochen</div>
+              <div className="text-sm text-slate-300">Rezept ansehen</div>
+            </div>
+          </div>
+          <span className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold">Öffnen</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/shopping')}
+          className="flex w-full items-center justify-between rounded-[28px] bg-[linear-gradient(135deg,#fff3e8_0%,#fffaf6_100%)] px-5 py-5 text-left shadow-[0_12px_28px_rgba(15,23,42,0.05)] ring-1 ring-orange-100"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-white/80 p-3 shadow-sm">
+              <ShoppingCart className="h-5 w-5 text-slate-700" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-slate-900">Einkaufsliste öffnen</div>
+              <div className="text-sm text-slate-500">{openItems} noch offen</div>
+            </div>
+          </div>
+          <span className="rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-slate-600">Öffnen</span>
+        </button>
+
+        <div className="rounded-[24px] bg-white px-5 py-4 text-sm text-slate-600 shadow-sm ring-1 ring-slate-200">
+          {days.length} Gerichte geplant · {openItems} Einkäufe offen
+        </div>
+
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => navigate('/swipe')}
+            className="w-full rounded-[24px] bg-white px-5 py-4 text-base font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200"
+          >
+            Woche ändern
+          </button>
+        </div>
 
         <button
           type="button"
           onClick={handleResetWeek}
           disabled={resetting}
-          className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-base font-semibold text-slate-700 shadow-sm disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-semibold text-slate-500 disabled:opacity-60"
         >
-          {resetting ? "Wird zurückgesetzt..." : "Woche zurücksetzen"}
+          <RotateCcw className="h-4 w-4" />
+          {resetting ? 'Wird gelöscht...' : 'Woche löschen'}
         </button>
       </div>
     </div>
