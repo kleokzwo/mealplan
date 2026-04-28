@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAuth } from '../middlewares/authMiddleware.js';
 import {
   createWeek,
   getCurrentWeek,
@@ -9,6 +10,8 @@ import {
 } from '../controllers/weekController.js';
 
 const router = Router();
+
+router.use(requireAuth);
 
 router.get('/active', getCurrentWeek);
 router.patch('/active/shopping-items/:itemId', updateActiveShoppingItem);

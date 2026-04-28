@@ -6,7 +6,7 @@ export const getSuggestions = async (req, res, next) => {
       householdType: req.query.householdType || 'familie',
       dietType: req.query.dietType || 'all',
       maxCookingTime: Number(req.query.maxCookingTime || 25),
-      limit: Number(req.query.limit || 5),
+      user: req.user || null,
     };
 
     const suggestions = await getMealSuggestions(filters);

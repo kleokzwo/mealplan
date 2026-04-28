@@ -8,8 +8,10 @@ import {
 } from '../services/planService.js';
 
 export const createWeek = async (req, res, next) => {
+  const userId = req.user.id;
   try {
     const week = await createActiveWeek({
+      userId,
       selectedMealIds: req.body.selectedMealIds,
     });
 
@@ -22,9 +24,9 @@ export const createWeek = async (req, res, next) => {
   }
 };
 
-export const getCurrentWeek = async (_req, res, next) => {
+export const getCurrentWeek = async (req, res, next) => {
   try {
-    const week = await getActiveWeek();
+    const week = await getActiveWeek(req.user.id);
 
     res.status(200).json({
       message: week ? 'Aktive Woche gefunden.' : 'Keine aktive Woche vorhanden.',
@@ -36,8 +38,10 @@ export const getCurrentWeek = async (_req, res, next) => {
 };
 
 export const updateActiveShoppingItem = async (req, res, next) => {
+  const userId = req.user.id;
   try {
     const week = await updateShoppingItemStatus({
+      userId,
       itemId: req.params.itemId,
       isChecked: req.body.isChecked,
     });
@@ -51,9 +55,9 @@ export const updateActiveShoppingItem = async (req, res, next) => {
   }
 };
 
-export const deleteCurrentWeek = async (_req, res, next) => {
+export const deleteCurrentWeek = async (req, res, next) => {
   try {
-    const result = await clearActiveWeek();
+    const result = await clearActiveWeek(req.user.id);
 
     res.status(200).json({
       message: result.deletedWeeks > 0 ? 'Aktive Woche gelöscht.' : 'Keine aktive Woche zum Löschen gefunden.',
@@ -65,8 +69,10 @@ export const deleteCurrentWeek = async (_req, res, next) => {
 };
 
 export const deleteActiveShoppingItem = async (req, res, next) => {
+  const userId = req.user.id;
   try {
     const week = await deleteShoppingItem({
+      userId,
       itemId: req.params.itemId,
     });
 
@@ -81,8 +87,10 @@ export const deleteActiveShoppingItem = async (req, res, next) => {
 
 
 export const updateActiveShoppingItemDetails = async (req, res, next) => {
+  const userId = req.user.id;
   try {
     const week = await updateShoppingItemDetails({
+      userId,
       itemId: req.params.itemId,
       name: req.body.name,
       quantity: req.body.quantity,

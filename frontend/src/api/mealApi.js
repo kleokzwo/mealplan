@@ -5,7 +5,6 @@ export const fetchMealSuggestions = async ({
   householdType = 'familie',
   dietType = 'all',
   maxCookingTime = 25,
-  limit = 5,
   refreshKey = 0,
   excludeIds = [],
 } = {}) => {
@@ -13,7 +12,6 @@ export const fetchMealSuggestions = async ({
     householdType,
     dietType,
     maxCookingTime: String(maxCookingTime),
-    limit: String(limit),
     refreshKey: String(refreshKey),
   });
 
