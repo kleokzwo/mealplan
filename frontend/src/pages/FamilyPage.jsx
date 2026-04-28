@@ -36,7 +36,7 @@ export default function FamilyPage() {
   }, []);
 
   async function handleSave() {
-    const nextChildrenCount = householdType === "family" ? Number(childrenCount || 1) : 0;
+    const nextChildrenCount = householdType === "familie" ? Number(childrenCount || 1) : 0;
 
     setIsSaving(true);
     setMessage("");
@@ -48,7 +48,7 @@ export default function FamilyPage() {
       const savedChildrenCount = Number(savedUser.childrenCount ?? savedUser.children_count ?? nextChildrenCount);
 
       setHouseholdType(savedHouseholdType);
-      setChildrenCount(savedHouseholdType === "family" ? savedChildrenCount || 1 : 1);
+      setChildrenCount(savedHouseholdType === "familie" ? savedChildrenCount || 1 : 1);
       setMessage("Haushalt gespeichert.");
     } catch (error) {
       setMessage(error?.data?.error || error?.message || "Speichern fehlgeschlagen.");
@@ -102,7 +102,7 @@ export default function FamilyPage() {
             })}
           </div>
 
-          {householdType === "family" ? (
+          {householdType === "familie" ? (
             <div className="mt-4">
               <label className="text-sm font-semibold text-slate-700">Anzahl Kinder</label>
               <select value={childrenCount} onChange={(event) => setChildrenCount(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold outline-none">
