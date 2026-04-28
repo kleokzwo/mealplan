@@ -5,7 +5,6 @@ export const fetchMealSuggestions = async ({
   householdType = 'familie',
   dietType = 'all',
   maxCookingTime = 25,
-  limit = 5,
   refreshKey = 0,
   excludeIds = [],
 } = {}) => {
@@ -13,7 +12,6 @@ export const fetchMealSuggestions = async ({
     householdType,
     dietType,
     maxCookingTime: String(maxCookingTime),
-    limit: String(limit),
     refreshKey: String(refreshKey),
   });
 
@@ -31,4 +29,8 @@ export const fetchActiveWeekSuggestions = async () => {
 
 export const updateMealSuggestionStatus = async (id, status) => {
   return httpClient.patch(`/meal-suggestions/${id}/status`, { status });
+};
+
+export const fetchMealSteps = async (mealId) => {
+  return httpClient.get(`/meals/${mealId}/steps`);
 };

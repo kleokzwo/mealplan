@@ -1,4 +1,4 @@
-import { getMealSuggestions } from '../services/mealService.js';
+import { getMealSuggestions, getMealSteps } from '../services/mealService.js';
 
 export const getSuggestions = async (req, res, next) => {
   try {
@@ -6,7 +6,7 @@ export const getSuggestions = async (req, res, next) => {
       householdType: req.query.householdType || 'familie',
       dietType: req.query.dietType || 'all',
       maxCookingTime: Number(req.query.maxCookingTime || 25),
-      limit: Number(req.query.limit || 5),
+      user: req.user || null,
     };
 
     const suggestions = await getMealSuggestions(filters);
@@ -15,6 +15,20 @@ export const getSuggestions = async (req, res, next) => {
       message: 'Rezeptvorschläge erfolgreich geladen.',
       filters,
       data: suggestions,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const getStepsByMealId = async (req, res, next) => {
+  try {
+    const steps = await getMealSteps(req.params.id);
+
+    res.status(200).json({
+      message: 'Zubereitungsschritte geladen.',
+      data: steps,
     });
   } catch (error) {
     next(error);

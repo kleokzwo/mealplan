@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { getMe } from "./api/userApi";
 
 import LoginPage from "./pages/LoginPage";
@@ -14,32 +20,31 @@ import PlanPage from "./pages/PlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
 import RecipeDetailPage from "./pages/RecipeDetailPage";
 import MobileBottomNav from "./components/MobileBottomNav";
+import SettingsPage from "./pages/SettingsPage";
+import FamilyPage from "./pages/FamilyPage";
+import NotificationSettingsPage from "./pages/NotificationSettingsPage";
+import PrivacyPage from "./pages/PrivacyPage";
 
-function SettingsPage() {
-  return <div className="p-6">Einstellungen</div>;
-}
-
-function FamilyPage() {
-  return <div className="p-6">Familie verwalten</div>;
-}
-
-function HelpPage() {
-  return <div className="p-6">Hilfe</div>;
-}
-
-function NotificationSettingsPage() {
-  return <div className="p-6">Benachrichtigungen</div>;
+function getStoredToken() {
+  return localStorage.getItem("token");
 }
 
 export default function App() {
   const location = useLocation();
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const navigate = useNavigate();
+
+  const [token, setToken] = useState(() => getStoredToken());
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const isAuthenticated = Boolean(token);
+
   useEffect(() => {
+    let isMounted = true;
+
     async function loadUser() {
       if (!token) {
+        if (!isMounted) return;
         setUser(null);
         setIsLoading(false);
         return;
@@ -49,42 +54,63 @@ export default function App() {
 
       try {
         const me = await getMe();
-        console.log("APP USER:", me);
+        if (!isMounted) return;
         setUser(me);
       } catch (err) {
         console.error("GET ME ERROR:", err);
         localStorage.removeItem("token");
+        if (!isMounted) return;
         setToken(null);
         setUser(null);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     loadUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, [token]);
 
   function handleAuthSuccess(nextToken) {
+    if (!nextToken) return;
+
     localStorage.setItem("token", nextToken);
     setToken(nextToken);
+    navigate("/", { replace: true });
   }
 
   function handleLogout() {
     localStorage.removeItem("token");
+    localStorage.removeItem("mealplan_token");
+
     setToken(null);
     setUser(null);
+    setIsLoading(false);
+
+    navigate("/login", { replace: true });
   }
 
   if (isLoading) {
     return <div className="p-6">Lädt...</div>;
   }
 
-  if (!token) {
+  if (!isAuthenticated) {
     return (
       <Routes>
-        <Route path="/login" element={<LoginPage onAuthSuccess={handleAuthSuccess} />} />
+        <Route
+          path="/login"
+          element={<LoginPage onAuthSuccess={handleAuthSuccess} />}
+        />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage onAuthSuccess={handleAuthSuccess} />} />
+        <Route
+          path="/verify-email"
+          element={<VerifyEmailPage onAuthSuccess={handleAuthSuccess} />}
+        />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -112,10 +138,13 @@ export default function App() {
             <Route path="/shopping" element={<ShoppingPage />} />
             <Route path="/more" element={<MorePage />} />
             <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<SettingsPage onLogout={handleLogout} />} />
             <Route path="/family" element={<FamilyPage />} />
-            <Route path="/help" element={<HelpPage />} />
-            <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
+            <Route
+              path="/settings/notifications"
+              element={<NotificationSettingsPage />}
+            />
+            <Route path="/more/privacy" element={<PrivacyPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>

@@ -25,7 +25,9 @@ export default function LoginPage({ onAuthSuccess }) {
         onAuthSuccess(result.token);
       }
 
-      navigate("/", { replace: true });
+      localStorage.setItem("token", token);
+      setIsAuthenticated(true);
+      navigate("/");
     } catch (err) {
       setError(err?.data?.error || err.message || "Login fehlgeschlagen");
     } finally {

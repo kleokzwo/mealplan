@@ -1,5 +1,17 @@
 import { pool } from '../config/db.js';
 
+const getSuggestionLimitForUser = (user) => {
+  const plan = user?.subscription_plan || user?.plan || user?.role;
+
+  const isPremium =
+    plan === 'premium' ||
+    plan === 'abo' ||
+    plan === 'paid' ||
+    plan === 'pro';
+
+  return isPremium ? 50 : 10;
+};
+
 const normalizeHouseholdType = (householdType) => {
   if (!householdType) return 'familie';
 
@@ -15,13 +27,14 @@ const normalizeHouseholdType = (householdType) => {
 };
 
 
+
 const normalizeMeal = (row) => ({
   ...row,
   familyFriendly: Boolean(row.familyFriendly),
   tags: row.tags ? row.tags.split(',').map((tag) => tag.trim()) : [],
 });
 
-const buildFilterQuery = ({ householdType, dietType, maxCookingTime }) => {
+const buildFilterQuery = ({ householdType, dietType, maxCookingTime, limit = 10 }) => {
   let query = `
     SELECT id, title, category, diet_type AS dietType, cooking_time_minutes AS cookingTimeMinutes,
            difficulty, family_friendly AS familyFriendly, household_fit AS householdFit,
@@ -41,6 +54,13 @@ const buildFilterQuery = ({ householdType, dietType, maxCookingTime }) => {
     query += ' AND diet_type = ?';
     params.push(dietType);
   }
+
+  query += `
+    ORDER BY RAND()
+    LIMIT ?
+  `;
+
+  params.push(limit);
 
   return { query, params };
 };
@@ -121,14 +141,16 @@ export const getMealSuggestions = async ({
   householdType = 'familie',
   dietType = 'all',
   maxCookingTime = 25,
-  limit = 5,
+  user = null,
 }) => {
   const normalizedHouseholdType = normalizeHouseholdType(householdType);
+  const limit = getSuggestionLimitForUser(user);
 
   const filters = buildFilterQuery({
     householdType: normalizedHouseholdType,
     dietType,
     maxCookingTime,
+    limit,
   });
 
   const [rows] = await pool.query(filters.query, filters.params);
@@ -140,9 +162,7 @@ export const getMealSuggestions = async ({
       score: scoreMeal(meal, normalizedHouseholdType),
     }))
     .sort((a, b) => {
-      if (b.score !== a.score) {
-        return b.score - a.score;
-      }
+      if (b.score !== a.score) return b.score - a.score;
       if (a.cookingTimeMinutes !== b.cookingTimeMinutes) {
         return a.cookingTimeMinutes - b.cookingTimeMinutes;
       }
@@ -160,4 +180,18 @@ export const getMealSuggestionsForUser = async (user, options = {}) => {
     maxCookingTime: options.maxCookingTime || user?.maxCookingTime || 25,
     limit: options.limit || 5,
   });
+};
+
+export const getMealSteps = async (mealId) => {
+  const [rows] = await pool.query(
+    `
+    SELECT step_number AS stepNumber, instruction
+    FROM meal_steps
+    WHERE meal_id = ?
+    ORDER BY step_number ASC
+    `,
+    [mealId]
+  );
+
+  return rows;
 };
