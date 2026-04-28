@@ -17,6 +17,21 @@ export default function MobileBottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  function handleTabClick(path) {
+    if (location.pathname === path) {
+      // Gleiche Seite nochmal antippen soll trotzdem einen Refresh-Impuls geben.
+      navigate(path, {
+        replace: true,
+        state: { refreshKey: Date.now() },
+      });
+      return;
+    }
+
+    navigate(path, {
+      state: path === "/shopping" ? { refreshKey: Date.now() } : undefined,
+    });
+  }
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(env(safe-area-inset-bottom)+0.55rem)]">
       <nav className="pointer-events-auto mx-auto max-w-md rounded-[30px] border border-white/10 bg-[#141414]/95 px-2 py-2 shadow-[0_18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
@@ -31,7 +46,7 @@ export default function MobileBottomNav() {
               <button
                 key={tab.path}
                 type="button"
-                onClick={() => navigate(tab.path)}
+                onClick={() => handleTabClick(tab.path)}
                 className={`flex min-h-[64px] appearance-none flex-col items-center justify-center gap-1 rounded-[22px] px-2 py-2 outline-none transition active:scale-[0.98] ${
                   active
                     ? "bg-lime-300 text-slate-950"

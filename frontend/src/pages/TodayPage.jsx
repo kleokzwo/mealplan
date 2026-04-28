@@ -495,16 +495,6 @@ export default function TodayPage() {
           {days.length} Gerichte geplant · {openItems} Einkäufe offen
         </div>
 
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => navigate('/swipe')}
-            className="w-full rounded-[24px] bg-white px-5 py-4 text-base font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200"
-          >
-            Woche ändern
-          </button>
-        </div>
-
         <button
           type="button"
           onClick={handleResetWeek}

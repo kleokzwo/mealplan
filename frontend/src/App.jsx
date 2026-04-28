@@ -25,26 +25,25 @@ import FamilyPage from "./pages/FamilyPage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 
-function getStoredToken() {
-  return localStorage.getItem("token");
+function ProtectedRoute({ token, children }) {
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 }
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [token, setToken] = useState(() => getStoredToken());
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isAuthenticated = Boolean(token);
-
   useEffect(() => {
-    let isMounted = true;
-
     async function loadUser() {
       if (!token) {
-        if (!isMounted) return;
         setUser(null);
         setIsLoading(false);
         return;
@@ -54,31 +53,23 @@ export default function App() {
 
       try {
         const me = await getMe();
-        if (!isMounted) return;
         setUser(me);
       } catch (err) {
         console.error("GET ME ERROR:", err);
         localStorage.removeItem("token");
-        if (!isMounted) return;
+        localStorage.removeItem("mealplan_token");
         setToken(null);
         setUser(null);
+        navigate("/login", { replace: true });
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     }
 
     loadUser();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [token]);
+  }, [token, navigate]);
 
   function handleAuthSuccess(nextToken) {
-    if (!nextToken) return;
-
     localStorage.setItem("token", nextToken);
     setToken(nextToken);
     navigate("/", { replace: true });
@@ -90,7 +81,6 @@ export default function App() {
 
     setToken(null);
     setUser(null);
-    setIsLoading(false);
 
     navigate("/login", { replace: true });
   }
@@ -99,7 +89,7 @@ export default function App() {
     return <div className="p-6">Lädt...</div>;
   }
 
-  if (!isAuthenticated) {
+  if (!token) {
     return (
       <Routes>
         <Route
@@ -132,19 +122,86 @@ export default function App() {
       <main className="pb-24">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<TodayPage />} />
-            <Route path="/swipe" element={<SwipePlannerPage />} />
-            <Route path="/plan" element={<PlanPage />} />
-            <Route path="/shopping" element={<ShoppingPage />} />
-            <Route path="/more" element={<MorePage />} />
-            <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-            <Route path="/settings" element={<SettingsPage onLogout={handleLogout} />} />
-            <Route path="/family" element={<FamilyPage />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute token={token}>
+                  <TodayPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/swipe"
+              element={
+                <ProtectedRoute token={token}>
+                  <SwipePlannerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/plan"
+              element={
+                <ProtectedRoute token={token}>
+                  <PlanPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/shopping"
+              element={
+                <ProtectedRoute token={token}>
+                  <ShoppingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/more"
+              element={
+                <ProtectedRoute token={token}>
+                  <MorePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recipe/:id"
+              element={
+                <ProtectedRoute token={token}>
+                  <RecipeDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute token={token}>
+                  <SettingsPage onLogout={handleLogout} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/family"
+              element={
+                <ProtectedRoute token={token}>
+                  <FamilyPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/settings/notifications"
-              element={<NotificationSettingsPage />}
+              element={
+                <ProtectedRoute token={token}>
+                  <NotificationSettingsPage />
+                </ProtectedRoute>
+              }
             />
-            <Route path="/more/privacy" element={<PrivacyPage />} />
+            <Route
+              path="/more/privacy"
+              element={
+                <ProtectedRoute token={token}>
+                  <PrivacyPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
