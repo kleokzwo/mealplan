@@ -3,6 +3,7 @@ import { ArrowLeft, Clock3, ChefHat, Users, Tags } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fetchActiveWeek } from "../api/weekApi";
+import { fetchMealSteps } from "../api/mealApi";
 
 const detailGradients = [
   "from-orange-200 via-orange-100 to-amber-100",
@@ -67,6 +68,8 @@ export default function RecipeDetailPage() {
   const [recipe, setRecipe] = useState(location.state?.recipe || null);
   const [day, setDay] = useState(location.state?.day || null);
   const [loading, setLoading] = useState(!location.state?.recipe);
+  const [steps, setSteps] = useState([]);
+  const [stepsLoading, setStepsLoading] = useState(false);
 
   useEffect(() => {
     if (location.state?.recipe) return;
@@ -87,6 +90,25 @@ export default function RecipeDetailPage() {
 
     loadRecipe();
   }, [id, location.state]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const loadSteps = async () => {
+      try {
+        setStepsLoading(true);
+        const response = await fetchMealSteps(id);
+        setSteps(response?.data || []);
+      } catch (error) {
+        console.error("Fehler beim Laden der Zubereitungsschritte:", error);
+        setSteps([]);
+      } finally {
+        setStepsLoading(false);
+      }
+    };
+
+    loadSteps();
+  }, [id]);
 
   const tags = useMemo(() => splitTags(recipe?.tags), [recipe?.tags]);
   const gradient = detailGradients[(Number(id) || 0) % detailGradients.length];
@@ -223,15 +245,29 @@ export default function RecipeDetailPage() {
 
             <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <p className="text-sm font-semibold uppercase tracking-[0.14em] text-indigo-500">
-                Kochen
+                Zubereitung
               </p>
-              <h2 className="mt-3 text-2xl font-bold text-slate-900">
-                Schritt-für-Schritt bald hier
-              </h2>
-              <p className="mt-3 text-base leading-7 text-slate-600">
-                Deine Datenbank hat aktuell noch keine Zutaten und Kochschritte. Sobald diese Felder da sind,
-                kann diese Seite direkt erweitert werden — ohne den Slide-Flow nochmal umzubauen.
-              </p>
+
+              <div className="mt-4 space-y-4">
+                {stepsLoading ? (
+                  <p className="text-sm text-slate-500">Schritte werden geladen...</p>
+                ) : steps.length > 0 ? (
+                  steps.map((step) => (
+                    <div key={step.stepNumber} className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-sm font-bold text-slate-900">
+                        Schritt {step.stepNumber}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {step.instruction}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Noch keine Zubereitungsschritte vorhanden.
+                  </p>
+                )}
+              </div>
             </section>
           </div>
         ) : null}

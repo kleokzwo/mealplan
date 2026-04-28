@@ -181,3 +181,17 @@ export const getMealSuggestionsForUser = async (user, options = {}) => {
     limit: options.limit || 5,
   });
 };
+
+export const getMealSteps = async (mealId) => {
+  const [rows] = await pool.query(
+    `
+    SELECT step_number AS stepNumber, instruction
+    FROM meal_steps
+    WHERE meal_id = ?
+    ORDER BY step_number ASC
+    `,
+    [mealId]
+  );
+
+  return rows;
+};

@@ -30,3 +30,7 @@ export const fetchActiveWeekSuggestions = async () => {
 export const updateMealSuggestionStatus = async (id, status) => {
   return httpClient.patch(`/meal-suggestions/${id}/status`, { status });
 };
+
+export const fetchMealSteps = async (mealId) => {
+  return httpClient.get(`/meals/${mealId}/steps`);
+};

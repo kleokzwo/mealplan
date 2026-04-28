@@ -48,15 +48,25 @@ export async function completeOnboarding(userId, { householdType, childrenCount 
 }
 
 export async function updateHouseholdProfile(userId, { householdType, childrenCount }) {
-  const safeChildrenCount = householdType === "family" ? Number(childrenCount || 0) : 0;
+  const safeChildrenCount = householdType === "familie" ? Number(childrenCount || 0) : 0;
 
   await pool.query(
     `
     UPDATE users
-    SET household_type = ?,
-        children_count = ?
+    SET household_type = ?, children_count = ?
     WHERE id = ?
     `,
     [householdType, safeChildrenCount, userId]
+  );
+
+  // Wichtig: deine App nutzt zusätzlich app_preferences.
+  // Darum muss diese Tabelle mitgezogen werden, sonst bleibt die UI/Planung gefühlt auf dem alten Wert.
+  await pool.query(
+    `
+    UPDATE app_preferences
+    SET household_type = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = 1
+    `,
+    [householdType]
   );
 }

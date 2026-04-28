@@ -1,79 +1,43 @@
-import { Settings, Users, Bell, CircleHelp } from "lucide-react";
+import { Settings, Users, Bell, CircleHelp, Shield } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const items = [
-  {
-    icon: Settings,
-    title: "Einstellungen",
-    text: "App, Präferenzen und Verhalten anpassen",
-    path: "/settings",
-  },
-  {
-    icon: Users,
-    title: "Familie verwalten",
-    text: "Mitglieder und Haushalt später erweitern",
-    path: "/family",
-  },
-  {
-    icon: Bell,
-    title: "Benachrichtigungen",
-    text: "Erinnerungen und Updates steuern",
-    path: "/settings/notifications",
-  },
-  {
-    icon: CircleHelp,
-    title: "Hilfe",
-    text: "Fragen, Feedback und Support",
-    path: "/help",
-  },
+  { icon: Settings, title: "Einstellungen", text: "App, Account und Pro-Abo", path: "/settings" },
+  { icon: Users, title: "Familie verwalten", text: "Haushalt und Kinderanzahl ändern", path: "/family" },
+  { icon: Bell, title: "Benachrichtigungen", text: "E-Mail ein oder ausschalten", path: "/settings/notifications" },
+  { icon: Shield, title: "Datenschutz", text: "Daten, Privatsphäre und Account löschen", path: "/more/privacy" },
+  { icon: CircleHelp, title: "Hilfe", text: "Fragen, Feedback und Support", path: "/help" },
 ];
 
 export default function MorePage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+    <main className="min-h-screen bg-slate-50 px-4 pb-28 pt-8">
       <div className="mx-auto max-w-md">
-        <section className="mb-5 rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">
-            Mehr
-          </p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-            Mehr Optionen
-          </h1>
-          <p className="mt-3 text-base leading-7 text-slate-600">
-            Alles, was nicht in den schnellen Alltagsflow gehört.
-          </p>
+        <section className="rounded-[32px] bg-white p-6 shadow-sm ring-1 ring-slate-200">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-indigo-500">Mehr</p>
+          <h1 className="mt-4 text-3xl font-bold text-slate-950">Mehr Optionen</h1>
+          <p className="mt-4 text-sm leading-6 text-slate-600">Alles, was nicht in den schnellen Alltagsflow gehört.</p>
         </section>
 
-        <div className="space-y-3">
+        <div className="mt-5 space-y-3">
           {items.map((item) => {
             const Icon = item.icon;
-
             return (
-              <button
-                key={item.title}
-                type="button"
-                onClick={() => navigate(item.path)}
-                className="flex w-full items-start gap-4 rounded-[24px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-200"
-              >
-                <div className="rounded-2xl bg-slate-100 p-3">
-                  <Icon className="h-5 w-5 text-slate-700" />
-                </div>
-
-                <div>
-                  <p className="text-base font-semibold text-slate-900">
-                    {item.title}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">
-                    {item.text}
-                  </p>
-                </div>
+              <button key={item.title} type="button" onClick={() => navigate(item.path)} className="flex w-full items-start gap-4 rounded-[24px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 active:scale-[0.99]">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-800">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold text-slate-950">{item.title}</span>
+                  <span className="mt-1 block text-sm text-slate-500">{item.text}</span>
+                </span>
               </button>
             );
           })}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
