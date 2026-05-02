@@ -45,6 +45,7 @@ export default function RegisterPage() {
         <div>
           <label className="block text-sm font-medium">E-Mail</label>
           <input
+            data-testid="register-email"
             type="email"
             autoComplete="email"
             value={email}
@@ -58,6 +59,7 @@ export default function RegisterPage() {
         <div>
           <label className="block text-sm font-medium">Passwort</label>
           <input
+            data-testid="register-password"
             type="password"
             autoComplete="new-password"
             value={password}
@@ -72,6 +74,7 @@ export default function RegisterPage() {
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <button
+          data-testid="register-submit"
           type="submit"
           disabled={isSubmitting}
           className="w-full rounded-2xl bg-black px-4 py-3 text-white disabled:opacity-50"

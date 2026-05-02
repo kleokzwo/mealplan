@@ -160,10 +160,26 @@ export async function updateShoppingItem(id, updates) {
   throw new Error('Update failed: no valid endpoint');
 }
 
+// frontend/src/api/weekApi.js
+
 export const deleteActiveWeek = async () => {
-  return httpClient('/weeks/active', {
-    method: 'DELETE',
-  });
+  try {
+    // httpClient.delete gibt bereits das geparste JSON zurück, keinen Response-Objekt
+    const result = await httpClient.delete('/weeks/active', {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    console.log('Delete API response:', result);
+    
+    // result ist bereits das geparste JSON
+    return result.data;
+  } catch (error) {
+    console.error('API Fehler:', error);
+    throw error;
+  }
 };
 
 export const fetchActiveWeekDays = async () => {

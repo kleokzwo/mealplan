@@ -58,12 +58,24 @@ export const updateActiveShoppingItem = async (req, res, next) => {
 export const deleteCurrentWeek = async (req, res, next) => {
   try {
     const result = await clearActiveWeek(req.user.id);
+    
+    console.log('Delete result:', result); // Debug-Log
 
+    // Erfolgreiche Response
     res.status(200).json({
-      message: result.deletedWeeks > 0 ? 'Aktive Woche gelöscht.' : 'Keine aktive Woche zum Löschen gefunden.',
-      data: result,
+      success: true,
+      message: result.deletedWeeks > 0 
+        ? `Woche erfolgreich gelöscht. ${result.deletedShoppingItems} Einkaufsitems und ${result.deletedDays} Tage wurden entfernt.`
+        : 'Keine aktive Woche zum Löschen gefunden.',
+      data: {
+        deletedWeeks: result.deletedWeeks,
+        deletedShoppingItems: result.deletedShoppingItems,
+        deletedDays: result.deletedDays,
+        weekId: result.weekId || null
+      }
     });
   } catch (error) {
+    console.error('Controller Error:', error);
     next(error);
   }
 };

@@ -14,7 +14,7 @@ import { createActiveWeek } from "../api/weekApi";
 import { fetchPreferences } from "../api/preferenceApi";
 
 const SWIPE_THRESHOLD = 110;
-const TARGET_LIKES = 5;
+const TARGET_LIKES = 7;
 const MINIMUM_LIKES = 3;
 
 function extractSuggestions(response) {
@@ -298,7 +298,7 @@ export default function SwipePlannerPage() {
             Diese Woche
           </p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-            Wähle 5 Gerichte in unter 1 Minute
+            Wähle {TARGET_LIKES} Gerichte in unter 1 Minute
           </h1>
           <p className="mt-3 text-base leading-7 text-slate-600">
             Swipe nach rechts, wenn es passt. Nach links, wenn nicht.
@@ -358,7 +358,7 @@ export default function SwipePlannerPage() {
     />
   </motion.div>
 </AnimatePresence>
-</div>
+      </div>
         <SwipeActionBar
           onReject={() => handleDecision("reject")}
           onLike={() => handleDecision("like")}

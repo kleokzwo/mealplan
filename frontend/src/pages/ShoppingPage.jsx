@@ -257,7 +257,7 @@ export default function ShoppingPage() {
             {Object.entries(groupedItems).map(([category, categoryItems]) => (
               <div
                 key={category}
-                className="rounded-[28px] bg-white p-4 shadow-sm ring-1 ring-slate-200"
+                className=""
               >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <h2 className="text-base font-black text-slate-950">{category}</h2>

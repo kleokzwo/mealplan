@@ -14,6 +14,7 @@ import { startDailySummaryJob } from "./cron/dailySummaryJob.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from './routes/userRoutes.js';
 import { notFoundHandler, errorHandler } from './middlewares/errorMiddleware.js';
+import testRoutes from './routes/testRoutes.js';
 
 dotenv.config();
 
@@ -45,6 +46,10 @@ app.use((req, res, next) => {
   res.set('Expires', '0');
   next();
 });
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/test', testRoutes);
+}
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

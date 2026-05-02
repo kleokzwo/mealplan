@@ -27,10 +27,10 @@ import PrivacyPage from "./pages/PrivacyPage";
 
 function ProtectedRoute({ token, children }) {
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace />
   }
 
-  return children;
+  return children
 }
 
 export default function App() {

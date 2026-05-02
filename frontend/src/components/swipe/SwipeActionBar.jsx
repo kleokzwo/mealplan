@@ -9,6 +9,7 @@ export default function SwipeActionBar({
   return (
     <div className="mt-5 flex items-center justify-center gap-4">
       <button
+        data-testid="swipe-dislike"
         type="button"
         onClick={onReject}
         className="flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition active:scale-95"
@@ -17,6 +18,7 @@ export default function SwipeActionBar({
       </button>
 
       <button
+        data-testid="swipe-card"
         type="button"
         onClick={onRefresh}
         disabled={disableRefresh}
@@ -26,6 +28,7 @@ export default function SwipeActionBar({
       </button>
 
       <button
+        data-testid="swipe-like"
         type="button"
         onClick={onLike}
         className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-sm transition active:scale-95"

@@ -48,6 +48,7 @@ export default function LoginPage({ onAuthSuccess }) {
           <input
             type="email"
             autoComplete="email"
+            data-testid="login-email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-2 w-full rounded-xl border border-slate-300 p-3"
@@ -61,6 +62,7 @@ export default function LoginPage({ onAuthSuccess }) {
           <input
             type="password"
             autoComplete="current-password"
+            data-testid="login-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-2 w-full rounded-xl border border-slate-300 p-3"
@@ -74,6 +76,7 @@ export default function LoginPage({ onAuthSuccess }) {
         <button
           type="submit"
           disabled={isSubmitting}
+          data-testid="login-submit"
           className="w-full rounded-2xl bg-black px-4 py-3 text-white disabled:opacity-50"
         >
           {isSubmitting ? "Loggt ein..." : "Einloggen"}

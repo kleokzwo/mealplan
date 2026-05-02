@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+// frontend/src/pages/TodayPage.jsx
+
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion';
 import { ChefHat, Heart, RefreshCw, RotateCcw, ShoppingCart, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +10,7 @@ import { useMealSuggestions } from '../hooks/useMealSuggestions';
 const SWIPE_THRESHOLD = 110;
 const VELOCITY_THRESHOLD = 650;
 const MIN_SELECTIONS = 3;
-const TARGET_SELECTIONS = 5;
+const TARGET_SELECTIONS = 7;
 
 const normalizeDays = (week) => {
   if (!week) return [];
@@ -67,46 +69,109 @@ function MetricPill({ label, value }) {
   );
 }
 
+// frontend/src/pages/TodayPage.jsx
+
+// Ersetze die KOMPLETTE EmptySwipeState Funktion mit dieser:
+
 function EmptySwipeState({ onWeekCreated }) {
-  const [visibleMeals, setVisibleMeals] = useState([]);
-  const [batch, setBatch] = useState(0);
-  const [cardIndex, setCardIndex] = useState(0);
-  const [exitDirection, setExitDirection] = useState(0);
+  const [meals, setMeals] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [likedMealIds, setLikedMealIds] = useState([]);
   const [creating, setCreating] = useState(false);
   const [localError, setLocalError] = useState('');
-
-  const x = useMotionValue(0);
-  const rotate = useTransform(x, [-220, 0, 220], [-16, 0, 16]);
-  const y = useTransform(x, [-220, 0, 220], [14, 0, 14]);
-  const likeOpacity = useTransform(x, [24, 120], [0, 1]);
-  const nopeOpacity = useTransform(x, [-120, -24], [1, 0]);
-
-  const { meals = [], isLoading, error } = useMealSuggestions({
+  const [batch, setBatch] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Animation refs
+  const [exitX, setExitX] = useState(0);
+  const cardRef = useRef(null);
+  
+  const { meals: suggestedMeals, isLoading: mealsLoading, error } = useMealSuggestions({
     householdType: 'single',
     dietType: 'all',
     maxCookingTime: 30,
-    limit: 5,
+    limit: 7,
     refreshKey: batch,
   });
 
+  // Lade Meals
   useEffect(() => {
-    const nextBatch = Array.isArray(meals) ? meals.filter(Boolean) : [];
-    setVisibleMeals(nextBatch);
-    setCardIndex(0);
-    setExitDirection(0);
-    setLocalError('');
-    x.set(0);
-  }, [meals, batch, x]);
+    if (suggestedMeals && suggestedMeals.length > 0) {
+      setMeals(suggestedMeals.filter(Boolean));
+      setIsLoading(false);
+    } else if (!mealsLoading) {
+      setIsLoading(false);
+    }
+  }, [suggestedMeals, mealsLoading]);
 
-  const activeMeal = visibleMeals[cardIndex] ?? null;
+  // Aktuelle Karte
+  const currentMeal = meals[currentIndex];
   const selectedCount = likedMealIds.length;
-  const image = getMealImage(activeMeal);
 
+  // Nächsten Batch laden
+  const loadNextBatch = () => {
+    setBatch(prev => prev + 1);
+    setCurrentIndex(0);
+    setExitX(0);
+  };
+
+  // LIKE (nach rechts swipen)
+  const handleLike = async () => {
+    if (!currentMeal || creating) return;
+    
+    const mealId = getMealId(currentMeal);
+    if (mealId && !likedMealIds.includes(mealId)) {
+      const newLikedIds = [...likedMealIds, mealId];
+      setLikedMealIds(newLikedIds);
+      
+      // Animation nach rechts
+      setExitX(500);
+      
+      // Kurze Verzögerung für die Animation
+      setTimeout(() => {
+        if (currentIndex + 1 >= meals.length) {
+          if (newLikedIds.length >= TARGET_SELECTIONS) {
+            finishWeek(newLikedIds);
+          } else if (newLikedIds.length >= MIN_SELECTIONS) {
+            finishWeek(newLikedIds);
+          } else {
+            loadNextBatch();
+          }
+        } else {
+          setCurrentIndex(prev => prev + 1);
+          setExitX(0);
+        }
+      }, 200);
+    }
+  };
+
+  // UNLIKE (nach links swipen)
+  const handleReject = () => {
+    if (!currentMeal || creating) return;
+    
+    // Animation nach links
+    setExitX(-500);
+    
+    setTimeout(() => {
+      if (currentIndex + 1 >= meals.length) {
+        if (likedMealIds.length >= MIN_SELECTIONS) {
+          finishWeek(likedMealIds);
+        } else {
+          loadNextBatch();
+        }
+      } else {
+        setCurrentIndex(prev => prev + 1);
+        setExitX(0);
+      }
+    }, 200);
+  };
+
+  // Woche speichern
   const finishWeek = async (mealIds) => {
-    if (creating) return;
-    if (!mealIds.length || mealIds.length < MIN_SELECTIONS) {
-      setLocalError(`Bitte wähle mindestens ${MIN_SELECTIONS} Gerichte.`);
+    if (creating || !mealIds.length || mealIds.length < MIN_SELECTIONS) {
+      if (mealIds.length < MIN_SELECTIONS) {
+        setLocalError(`Bitte wähle mindestens ${MIN_SELECTIONS} Gerichte aus.`);
+      }
       return;
     }
 
@@ -118,90 +183,47 @@ function EmptySwipeState({ onWeekCreated }) {
     } catch (err) {
       console.error('Fehler beim Erstellen der Woche:', err);
       setLocalError('Die Woche konnte gerade nicht erstellt werden.');
-    } finally {
       setCreating(false);
     }
   };
 
-  const showNextBatch = () => setBatch((prev) => prev + 1);
-
-  const handleLike = async () => {
-    if (!activeMeal || creating) return;
-
-    const mealId = getMealId(activeMeal);
-    const nextLikedIds =
-      mealId && !likedMealIds.includes(mealId) ? [...likedMealIds, mealId] : likedMealIds;
-
-    setLikedMealIds(nextLikedIds);
-    setExitDirection(1);
-
-    if (nextLikedIds.length >= TARGET_SELECTIONS) {
-      await finishWeek(nextLikedIds);
-      return;
-    }
-
-    const nextIndex = cardIndex + 1;
-    if (nextIndex >= visibleMeals.length) {
-      if (nextLikedIds.length >= MIN_SELECTIONS) {
-        await finishWeek(nextLikedIds);
-      } else {
-        showNextBatch();
-      }
-      return;
-    }
-
-    setCardIndex(nextIndex);
-    x.set(0);
-  };
-
-  const handleReject = () => {
-    if (!activeMeal || creating) return;
-    setExitDirection(-1);
-
-    const nextIndex = cardIndex + 1;
-    if (nextIndex >= visibleMeals.length) {
-      if (likedMealIds.length >= MIN_SELECTIONS) {
-        return;
-      }
-      showNextBatch();
-      return;
-    }
-    setCardIndex(nextIndex);
-    x.set(0);
-  };
-
-  const handleReload = () => {
-    if (creating) return;
-    showNextBatch();
-  };
-
-  const handleDragEnd = async (_, info) => {
+  // Drag Ende Handler für flüssiges Swipen
+  const handleDragEnd = (event, info) => {
     const offsetX = info.offset.x;
     const velocityX = info.velocity.x;
-
-    if (offsetX > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
-      await handleLike();
-      return;
-    }
-
-    if (offsetX < -SWIPE_THRESHOLD || velocityX < -VELOCITY_THRESHOLD) {
+    
+    // Schwellwert für Swipe
+    if (offsetX > 100 || velocityX > 500) {
+      handleLike();
+    } else if (offsetX < -100 || velocityX < -500) {
       handleReject();
-      return;
+    } else {
+      // Zurück zur Mitte animieren
+      setExitX(0);
     }
-
-    x.set(0);
   };
 
-  if (isLoading && !activeMeal) return <div className="min-h-screen bg-slate-50" />;
+  // Loading State
+  if (isLoading || mealsLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-slate-500">Lade Vorschläge...</p>
+        </div>
+      </div>
+    );
+  }
 
-  if (error && !activeMeal) {
+  // Error State
+  if (error && (!meals || meals.length === 0)) {
     return (
       <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
         <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
           <h2 className="text-2xl font-bold text-slate-900">Vorschläge konnten nicht geladen werden.</h2>
           <button
             type="button"
-            onClick={handleReload}
+            onClick={loadNextBatch}
             className="mt-5 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
           >
             Nochmal versuchen
@@ -211,28 +233,8 @@ function EmptySwipeState({ onWeekCreated }) {
     );
   }
 
-  if (!activeMeal && likedMealIds.length < MIN_SELECTIONS) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Weiter auswählen</p>
-          <h2 className="mt-3 text-3xl font-bold text-slate-900">Noch nicht genug dabei.</h2>
-          <p className="mt-3 text-base leading-7 text-slate-500">
-            Du hast bisher {likedMealIds.length} von mindestens {MIN_SELECTIONS} Gerichten ausgewählt.
-          </p>
-          <button
-            type="button"
-            onClick={handleReload}
-            className="mt-6 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
-          >
-            5 neue Vorschläge
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!activeMeal && likedMealIds.length >= MIN_SELECTIONS) {
+  // Keine Karte mehr aber genug Auswahl
+  if (!currentMeal && likedMealIds.length >= MIN_SELECTIONS) {
     return (
       <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
         <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
@@ -252,7 +254,7 @@ function EmptySwipeState({ onWeekCreated }) {
             </button>
             <button
               type="button"
-              onClick={handleReload}
+              onClick={loadNextBatch}
               disabled={creating}
               className="w-full rounded-[22px] bg-white px-5 py-4 text-base font-semibold text-slate-700 ring-1 ring-slate-200 disabled:opacity-60"
             >
@@ -264,112 +266,148 @@ function EmptySwipeState({ onWeekCreated }) {
     );
   }
 
+  // Keine Karte mehr und nicht genug Auswahl
+  if (!currentMeal && likedMealIds.length < MIN_SELECTIONS) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Weiter auswählen</p>
+          <h2 className="mt-3 text-3xl font-bold text-slate-900">Noch nicht genug dabei.</h2>
+          <p className="mt-3 text-base leading-7 text-slate-500">
+            Du hast bisher {likedMealIds.length} von mindestens {MIN_SELECTIONS} Gerichten ausgewählt.
+          </p>
+          <button
+            type="button"
+            onClick={loadNextBatch}
+            className="mt-6 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
+          >
+            5 neue Vorschläge
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const image = getMealImage(currentMeal);
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 pt-5 pb-28">
       <div className="mx-auto max-w-md">
+        {/* Fortschrittsanzeige */}
         <div className="mb-3 flex items-center justify-between px-1 text-sm font-semibold text-slate-500">
           <span>{selectedCount}/{TARGET_SELECTIONS} gewählt</span>
           <span>mind. {MIN_SELECTIONS}</span>
         </div>
 
-        <div className="relative h-[520px]">
-          <AnimatePresence initial={false} custom={exitDirection} mode="wait">
-            <motion.article
-              key={`${getMealId(activeMeal) ?? cardIndex}-${batch}`}
-              custom={exitDirection}
-              initial={(dir) => ({
-                x: dir >= 0 ? 260 : -260,
-                y: 10,
-                opacity: 0,
-                scale: 0.97,
-                rotate: dir >= 0 ? 8 : -8,
-              })}
-              animate={{ x: 0, y: 0, opacity: 1, scale: 1, rotate: 0 }}
-              exit={(dir) => ({
-                x: dir >= 0 ? 520 : -520,
-                y: 40,
-                opacity: 0,
-                rotate: dir >= 0 ? 18 : -18,
-                transition: { duration: 0.22, ease: 'easeOut' },
-              })}
-              transition={{ type: 'spring', stiffness: 330, damping: 28, mass: 0.9 }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.14}
-              style={{ x, rotate, y }}
-              onDragEnd={handleDragEnd}
-              className="relative overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#f7f3ff_0%,#f8f8fb_42%,#ffffff_100%)] px-5 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/70"
-            >
+        {/* Swipe Card Container */}
+        <div className="relative h-[520px] w-full">
+          <motion.div
+            key={currentMeal.id || currentIndex}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.7}
+            onDragEnd={handleDragEnd}
+            animate={{ x: exitX }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="absolute w-full cursor-grab active:cursor-grabbing"
+            style={{ touchAction: 'pan-y' }}
+          >
+            <div className="relative overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#f7f3ff_0%,#f8f8fb_42%,#ffffff_100%)] px-5 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/70">
+              
+              {/* Like/Dislike Overlays während des Swipens */}
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center rounded-[34px] pointer-events-none z-10"
+                style={{
+                  background: "linear-gradient(135deg, rgba(34,197,94,0.9) 0%, rgba(16,185,129,0.8) 100%)",
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ 
+                  opacity: exitX > 100 ? 0.8 : 0,
+                  x: exitX > 100 ? 0 : -100
+                }}
+                transition={{ duration: 0.1 }}
+              >
+                <Heart className="w-20 h-20 text-white fill-white" />
+              </motion.div>
+              
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center rounded-[34px] pointer-events-none z-10"
+                style={{
+                  background: "linear-gradient(135deg, rgba(239,68,68,0.9) 0%, rgba(220,38,38,0.8) 100%)",
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ 
+                  opacity: exitX < -100 ? 0.8 : 0,
+                  x: exitX < -100 ? 0 : 100
+                }}
+                transition={{ duration: 0.1 }}
+              >
+                <X className="w-20 h-20 text-white" />
+              </motion.div>
+
+              {/* Bild */}
               {image ? (
                 <div className="mb-4 h-[140px] overflow-hidden rounded-[24px] bg-slate-200">
-                  <img src={image} alt={getMealTitle(activeMeal)} className="h-full w-full object-cover" />
+                  <img src={image} alt={getMealTitle(currentMeal)} className="h-full w-full object-cover" />
                 </div>
               ) : (
                 <div className="mb-4 h-[140px] rounded-[24px] bg-[linear-gradient(135deg,#d8ccff_0%,#f6ebff_45%,#ffeccf_100%)]" />
               )}
 
-              <motion.div
-                style={{ opacity: nopeOpacity }}
-                className="pointer-events-none absolute left-4 top-4 rounded-2xl border-2 border-rose-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-rose-500"
-              >
-                Nein
-              </motion.div>
-
-              <motion.div
-                style={{ opacity: likeOpacity }}
-                className="pointer-events-none absolute right-4 top-4 rounded-2xl border-2 border-emerald-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-600"
-              >
-                Passt
-              </motion.div>
-
+              {/* Inhalt */}
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-500">Vorschlag</p>
                   <h1 className="mt-3 max-w-[220px] text-[22px] font-bold leading-tight text-slate-900">
-                    {getMealTitle(activeMeal)}
+                    {getMealTitle(currentMeal)}
                   </h1>
                 </div>
                 <span className="mt-8 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600">
-                  {getMealCategory(activeMeal)}
+                  {getMealCategory(currentMeal)}
                 </span>
               </div>
 
+              {/* Metriken */}
               <div className="mt-5 grid grid-cols-3 gap-2.5">
                 <MetricPill
                   label="Zeit"
-                  value={getMealTime(activeMeal) ? `${getMealTime(activeMeal)} Min.` : '- Min.'}
+                  value={getMealTime(currentMeal) ? `${getMealTime(currentMeal)} Min.` : '- Min.'}
                 />
-                <MetricPill label="Level" value={getMealDifficulty(activeMeal)} />
-                <MetricPill label="Typ" value={getMealType(activeMeal)} />
+                <MetricPill label="Level" value={getMealDifficulty(currentMeal)} />
+                <MetricPill label="Typ" value={getMealType(currentMeal)} />
               </div>
 
+              {/* Beschreibung */}
               <div className="mt-5">
                 <h2 className="text-[18px] font-bold text-slate-900">Warum das passt</h2>
                 <ul className="mt-3 space-y-3 text-[15px] leading-7 text-slate-500">
-                  {reasonsForMeal(activeMeal).map((reason) => (
+                  {reasonsForMeal(currentMeal).map((reason) => (
                     <li key={reason}>• {reason}</li>
                   ))}
                 </ul>
               </div>
 
-              <p className="mt-5 text-xs text-slate-400">Links = nein · Rechts = passt</p>
-            </motion.article>
-          </AnimatePresence>
+              <p className="mt-5 text-xs text-slate-400 text-center">
+                ← Links swipen | Rechts swipen →
+              </p>
+            </div>
+          </motion.div>
         </div>
 
+        {/* Buttons */}
         <div className="mt-4 flex items-center justify-center gap-4">
           <button
             type="button"
             onClick={handleReject}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
             aria-label="Ablehnen"
           >
             <X className="h-6 w-6" />
           </button>
           <button
             type="button"
-            onClick={handleReload}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200"
+            onClick={loadNextBatch}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
             aria-label="Neue Vorschläge laden"
           >
             <RefreshCw className="h-5 w-5" />
@@ -378,14 +416,53 @@ function EmptySwipeState({ onWeekCreated }) {
             type="button"
             onClick={handleLike}
             disabled={creating}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] disabled:opacity-60"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] active:scale-95 transition-transform disabled:opacity-60"
             aria-label="Gefällt mir"
           >
             <Heart className="h-7 w-7 fill-current" />
           </button>
         </div>
 
-        {localError ? <p className="mt-3 text-center text-sm font-medium text-rose-500">{localError}</p> : null}
+        {localError && (
+          <p className="mt-3 text-center text-sm font-medium text-rose-500">{localError}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Bestätigungsdialog-Komponente
+function ResetConfirmDialog({ isOpen, onConfirm, onCancel, isResetting }) {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <div className="flex items-center gap-3 text-rose-500">
+          <RotateCcw className="h-6 w-6" />
+          <h3 className="text-xl font-bold">Woche zurücksetzen?</h3>
+        </div>
+        
+        <p className="mt-3 text-slate-600">
+          Dadurch werden <strong>alle geplanten Gerichte</strong> und die <strong>gesamte Einkaufsliste</strong> unwiderruflich gelöscht.
+        </p>
+        
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isResetting}
+            className="flex-1 rounded-xl border border-slate-200 bg-white py-3 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isResetting}
+            className="flex-1 rounded-xl bg-rose-500 py-3 font-semibold text-white shadow-sm transition-colors hover:bg-rose-600 disabled:opacity-60"
+          >
+            {isResetting ? 'Wird gelöscht...' : 'Ja, löschen'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -396,6 +473,8 @@ export default function TodayPage() {
   const [week, setWeek] = useState(null);
   const [loadingWeek, setLoadingWeek] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetError, setResetError] = useState('');
 
   const loadWeek = async () => {
     try {
@@ -424,12 +503,30 @@ export default function TodayPage() {
   const handleResetWeek = async () => {
     try {
       setResetting(true);
-      await deleteActiveWeek();
+      setResetError('');
+      
+      console.log('🔄 Lösche Woche...');
+      
+      // API-Aufruf zum Löschen der kompletten Woche
+      const result = await deleteActiveWeek();
+      
+      console.log('✅ Löschergebnis:', result);
+      
+      // WICHTIG: Nach dem Löschen die aktuelle Woche NEU laden
+      // Das sollte null zurückgeben, weil keine aktive Woche mehr existiert
       await loadWeek();
+      
+      // Optional: Kurze Erfolgsmeldung
+      if (result && result.deletedWeeks > 0) {
+        console.log(`✅ Erfolg: ${result.deletedShoppingItems} Einkaufsitems gelöscht`);
+      }
+      
     } catch (error) {
-      console.error('Fehler beim Zurücksetzen der Woche:', error);
+      console.error('❌ Fehler beim Zurücksetzen:', error);
+      setResetError('Die Woche konnte nicht zurückgesetzt werden. Bitte versuche es später erneut.');
     } finally {
       setResetting(false);
+      setShowResetConfirm(false);
     }
   };
 
@@ -451,7 +548,7 @@ export default function TodayPage() {
               </p>
             </div>
             <div className="rounded-[24px] bg-white/85 px-4 py-3 text-center shadow-sm ring-1 ring-slate-200/70 backdrop-blur">
-              <div className="text-xl font-bold text-emerald-600">{days.length}/5</div>
+              <div className="text-xl font-bold text-emerald-600">{days.length}/7</div>
               <div className="text-xs text-slate-500">geplant</div>
             </div>
           </div>
@@ -495,15 +592,29 @@ export default function TodayPage() {
           {days.length} Gerichte geplant · {openItems} Einkäufe offen
         </div>
 
+        {/* NEU: Reset-Button mit Bestätigungsdialog */}
         <button
           type="button"
-          onClick={handleResetWeek}
+          onClick={() => setShowResetConfirm(true)}
           disabled={resetting}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-semibold text-slate-500 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-60"
         >
           <RotateCcw className="h-4 w-4" />
-          {resetting ? 'Wird gelöscht...' : 'Woche löschen'}
+          {resetting ? 'Wird gelöscht...' : 'Komplette Woche löschen'}
         </button>
+        
+        {/* NEU: Fehlermeldung anzeigen */}
+        {resetError && (
+          <p className="text-center text-sm font-medium text-rose-500">{resetError}</p>
+        )}
+        
+        {/* NEU: Bestätigungsdialog */}
+        <ResetConfirmDialog
+          isOpen={showResetConfirm}
+          onConfirm={handleResetWeek}
+          onCancel={() => setShowResetConfirm(false)}
+          isResetting={resetting}
+        />
       </div>
     </div>
   );

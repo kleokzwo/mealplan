@@ -40,6 +40,7 @@ function OnboardingPage({ initialPreferences, onContinue, isSaving }) {
           <label>
             <span>Für wen kochst du meistens?</span>
             <select
+              data-testid="onboarding-household-type"
               value={form.householdType}
               onChange={(event) => handleChange('householdType', event.target.value)}
             >
@@ -52,6 +53,7 @@ function OnboardingPage({ initialPreferences, onContinue, isSaving }) {
           <label>
             <span>Wie esst ihr?</span>
             <select
+              data-testid="onboarding-diet-type"
               value={form.dietType}
               onChange={(event) => handleChange('dietType', event.target.value)}
             >
@@ -66,6 +68,7 @@ function OnboardingPage({ initialPreferences, onContinue, isSaving }) {
           <label>
             <span>Wie schnell soll es gehen?</span>
             <select
+              data-testid="onboarding-max-cooking-time"
               value={form.maxCookingTime}
               onChange={(event) => handleChange('maxCookingTime', Number(event.target.value))}
             >
@@ -77,7 +80,7 @@ function OnboardingPage({ initialPreferences, onContinue, isSaving }) {
             </select>
           </label>
 
-          <button type="submit" className="action-button primary full-width" disabled={isSaving}>
+          <button data-testid="onboarding-submit" type="submit" className="action-button primary full-width" disabled={isSaving}>
             {isSaving ? 'Wird gespeichert…' : 'Vorschläge starten'}
           </button>
         </form>
