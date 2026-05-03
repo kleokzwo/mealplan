@@ -1,5 +1,6 @@
-import { Settings, Users, Bell, CircleHelp, Shield } from "lucide-react";
+import { Settings, Users, Bell, CircleHelp, Shield, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { APP_VERSION, CHANGELOG } from "../config/appInfo";
 
 const items = [
   { icon: Settings, title: "Einstellungen", text: "App, Account und Pro-Abo", path: "/settings" },
@@ -7,6 +8,12 @@ const items = [
   { icon: Bell, title: "Benachrichtigungen", text: "E-Mail ein oder ausschalten", path: "/settings/notifications" },
   { icon: Shield, title: "Datenschutz", text: "Daten, Privatsphäre und Account löschen", path: "/more/privacy" },
   { icon: CircleHelp, title: "Hilfe", text: "Fragen, Feedback und Support", path: "/help" },
+  {
+  icon: Sparkles,
+  title: `Neu in MealPlan ${APP_VERSION}`,
+  text: CHANGELOG[0].title,
+  path: "/changelog",
+},
 ];
 
 export default function MorePage() {

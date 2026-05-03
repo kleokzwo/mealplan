@@ -15,6 +15,8 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from './routes/userRoutes.js';
 import { notFoundHandler, errorHandler } from './middlewares/errorMiddleware.js';
 import testRoutes from './routes/testRoutes.js';
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 
 dotenv.config();
 
@@ -23,14 +25,43 @@ const PORT = process.env.PORT || 4000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 startDailySummaryJob();
+testConnection()
 
-app.use(
-  cors({
-    origin: CLIENT_URL,
-    credentials: true,
-  })
-);
-app.use(express.json());
+const allowedOrigins = [
+  "http://localhost:5173", // Vite dev
+  "http://localhost:3000", // optional
+  process.env.CLIENT_URL,  // dein deployed frontend
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // erlaubt z.B. Postman oder mobile apps (kein origin)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("CORS nicht erlaubt"));
+    }
+  },
+  credentials: true,
+}));
+
+app.use(helmet());
+app.use(express.json({
+  limit: "1mb",
+}));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 Minuten
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Zu viele Anfragen. Bitte versuche es später erneut.",
+  },
+});
 
 app.get('/', (_req, res) => {
   res.json({
@@ -51,7 +82,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/test', testRoutes);
 }
 
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/users", userRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/preferences', preferenceRoutes);
@@ -67,11 +98,14 @@ app.use(errorHandler);
 const startServer = async () => {
   try {
     await testConnection();
+
+    startDailySummaryJob();
+
     app.listen(PORT, () => {
-      console.log(`Server läuft auf http://localhost:${PORT}`);
+      console.log(`Server läuft auf Port ${PORT}`);
     });
   } catch (error) {
-    console.error('Serverstart fehlgeschlagen:', error.message);
+    console.error("Server konnte nicht gestartet werden:", error);
     process.exit(1);
   }
 };
