@@ -51,7 +51,30 @@ const getMealCategory = (meal) => meal?.category ?? meal?.type ?? 'Gericht';
 const getMealDifficulty = (meal) => meal?.difficulty ?? 'einfach';
 const getMealType = (meal) => meal?.dietType ?? meal?.diet_type ?? meal?.type ?? '—';
 const getMealTime = (meal) => meal?.cookTime ?? meal?.cooking_time_minutes ?? meal?.cookingTime ?? null;
-const getMealImage = (meal) => meal?.image_url ?? meal?.imageUrl ?? meal?.image ?? null;
+const getMealImage = (meal) => {
+  const rawImage =
+    meal?.image_url ||
+    meal?.imageUrl ||
+    meal?.image ||
+    "";
+
+  if (!rawImage) return null;
+
+  // Wenn already full URL → direkt nutzen
+  if (rawImage.startsWith("http")) {
+    return rawImage;
+  }
+
+  // API URL holen
+  let base = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
+  // 🔥 WICHTIG: /api entfernen wenn vorhanden
+  base = base.replace(/\/api\/?$/, "");
+
+  const cleanPath = rawImage.replace(/^\/+/, "");
+
+  return `${base}/${cleanPath}`;
+};
 
 const reasonsForMeal = (meal) => {
   const out = [];
@@ -364,13 +387,13 @@ function EmptySwipeState({ onWeekCreated }) {
         </div>
 
         <div className="w-full bg-slate-200 rounded-full h-2 mb-4">
-          <div 
+          <div
             className="bg-indigo-500 h-2 rounded-full transition-all duration-300"
             style={{ width: `${(selectedCount / TARGET_SELECTIONS) * 100}%` }}
           />
         </div>
 
-        <div className="relative h-[520px]">
+        <div className="relative min-h-[520px]">
           <motion.div
             key={currentMeal.id || currentIndex}
             drag="x"
@@ -384,46 +407,63 @@ function EmptySwipeState({ onWeekCreated }) {
           >
             <motion.div
               style={{ opacity: nopeOpacity }}
-              className="pointer-events-none absolute left-4 top-4 rounded-2xl border-2 border-rose-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-rose-500 z-10"
+              className="pointer-events-none absolute left-4 top-4 z-10 rounded-2xl border-2 border-rose-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-rose-500"
             >
               Nein
             </motion.div>
 
             <motion.div
               style={{ opacity: likeOpacity }}
-              className="pointer-events-none absolute right-4 top-4 rounded-2xl border-2 border-emerald-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-600 z-10"
+              className="pointer-events-none absolute right-4 top-4 z-10 rounded-2xl border-2 border-emerald-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-600"
             >
               Passt
             </motion.div>
 
             {image ? (
-              <div className="mb-4 h-[140px] overflow-hidden rounded-[24px] bg-slate-200">
-                <img src={image} alt={getMealTitle(currentMeal)} className="h-full w-full object-cover" />
+              <div className="mb-4 h-[180px] overflow-hidden rounded-[28px] bg-slate-200 shadow-inner">
+                <img
+                  src={image}
+                  alt={getMealTitle(currentMeal)}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
               </div>
             ) : (
-              <div className="mb-4 h-[140px] rounded-[24px] bg-[linear-gradient(135deg,#d8ccff_0%,#f6ebff_45%,#ffeccf_100%)]" />
+              <div className="mb-4 h-[180px] rounded-[28px] bg-[linear-gradient(135deg,#d8ccff_0%,#f6ebff_45%,#ffeccf_100%)]" />
             )}
 
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-500">Vorschlag</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-500">
+                  Vorschlag
+                </p>
                 <h1 className="mt-3 max-w-[220px] text-[22px] font-bold leading-tight text-slate-900">
                   {getMealTitle(currentMeal)}
                 </h1>
               </div>
+
               <span className="mt-8 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600">
                 {getMealCategory(currentMeal)}
               </span>
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-2.5">
-              <MetricPill label="Zeit" value={getMealTime(currentMeal) ? `${getMealTime(currentMeal)} Min.` : '- Min.'} />
+              <MetricPill
+                label="Zeit"
+                value={
+                  getMealTime(currentMeal)
+                    ? `${getMealTime(currentMeal)} Min.`
+                    : "- Min."
+                }
+              />
               <MetricPill label="Level" value={getMealDifficulty(currentMeal)} />
               <MetricPill label="Typ" value={getMealType(currentMeal)} />
             </div>
 
             <div className="mt-5">
-              <h2 className="text-[18px] font-bold text-slate-900">Warum das passt</h2>
+              <h2 className="text-[18px] font-bold text-slate-900">
+                Warum das passt
+              </h2>
               <ul className="mt-3 space-y-3 text-[15px] leading-7 text-slate-500">
                 {reasonsForMeal(currentMeal).map((reason) => (
                   <li key={reason}>• {reason}</li>
@@ -431,39 +471,31 @@ function EmptySwipeState({ onWeekCreated }) {
               </ul>
             </div>
 
-            <p className="mt-5 text-xs text-slate-400 text-center">← Links swipen | Rechts swipen →</p>
+            <p className="mt-5 text-center text-xs text-slate-400">
+              ← Links swipen | Rechts swipen →
+            </p>
           </motion.div>
         </div>
 
         <div className="mt-4 flex items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={handleReject}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
-            aria-label="Ablehnen"
-          >
+          <button type="button" onClick={handleReject} className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform">
             <X className="h-6 w-6" />
           </button>
-          <button
-            type="button"
-            onClick={handleReload}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
-            aria-label="Neue Vorschläge laden"
-          >
+
+          <button type="button" onClick={handleReload} className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform">
             <RefreshCw className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            onClick={handleLike}
-            disabled={creating}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] active:scale-95 transition-transform disabled:opacity-60"
-            aria-label="Gefällt mir"
-          >
+
+          <button type="button" onClick={handleLike} disabled={creating} className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] active:scale-95 transition-transform disabled:opacity-60">
             <Heart className="h-7 w-7 fill-current" />
           </button>
         </div>
 
-        {localError && <p className="mt-3 text-center text-sm font-medium text-rose-500">{localError}</p>}
+        {localError && (
+          <p className="mt-3 text-center text-sm font-medium text-rose-500">
+            {localError}
+          </p>
+        )}
       </div>
     </div>
   );
