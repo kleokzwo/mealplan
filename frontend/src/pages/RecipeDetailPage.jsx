@@ -1,9 +1,11 @@
+// frontend/src/pages/RecipeDetailPage.jsx
+
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clock3, ChefHat, Users, Tags } from "lucide-react";
+import { ArrowLeft, Clock3, ChefHat, Users, Tags, ShoppingBasket, Scale } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fetchActiveWeek } from "../api/weekApi";
-import { fetchMealSteps } from "../api/mealApi";
+import { fetchMealSteps, fetchMealIngredients } from "../api/mealApi";
 
 const detailGradients = [
   "from-orange-200 via-orange-100 to-amber-100",
@@ -61,6 +63,17 @@ function splitTags(tags) {
   return [];
 }
 
+function groupIngredientsByCategory(ingredients) {
+  if (!ingredients || ingredients.length === 0) return {};
+  
+  return ingredients.reduce((acc, ingredient) => {
+    const category = ingredient.category || "Zutaten";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(ingredient);
+    return acc;
+  }, {});
+}
+
 export default function RecipeDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,6 +83,8 @@ export default function RecipeDetailPage() {
   const [loading, setLoading] = useState(!location.state?.recipe);
   const [steps, setSteps] = useState([]);
   const [stepsLoading, setStepsLoading] = useState(false);
+  const [ingredients, setIngredients] = useState([]);
+  const [ingredientsLoading, setIngredientsLoading] = useState(false);
 
   useEffect(() => {
     if (location.state?.recipe) return;
@@ -110,7 +125,31 @@ export default function RecipeDetailPage() {
     loadSteps();
   }, [id]);
 
+  // NEU: Zutaten laden
+  useEffect(() => {
+    if (!id) return;
+
+  // In RecipeDetailPage.jsx, die loadIngredients Funktion:
+
+  const loadIngredients = async () => {
+    try {
+      setIngredientsLoading(true);
+      const response = await fetchMealIngredients(id);
+      // PROBLEM: response ist bereits das Array, nicht { data: [...] }
+      setIngredients(response || []);  // ← Ändere von response?.data zu response
+    } catch (error) {
+      console.error("Fehler beim Laden der Zutaten:", error);
+      setIngredients([]);
+    } finally {
+      setIngredientsLoading(false);
+    }
+  };
+
+    loadIngredients();
+  }, [id]);
+
   const tags = useMemo(() => splitTags(recipe?.tags), [recipe?.tags]);
+  const groupedIngredients = useMemo(() => groupIngredientsByCategory(ingredients), [ingredients]);
   const gradient = detailGradients[(Number(id) || 0) % detailGradients.length];
 
   return (
@@ -195,6 +234,46 @@ export default function RecipeDetailPage() {
 
         {recipe ? (
           <div className="mt-5 space-y-4 pb-6">
+            {/* ==================== NEU: ZUTATEN SECTION ==================== */}
+            <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <div className="flex items-center gap-2">
+                <ShoppingBasket className="h-4 w-4 text-slate-500" />
+                <p className="text-sm font-semibold uppercase tracking-[0.14em] text-indigo-500">
+                  Zutaten
+                </p>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {ingredientsLoading ? (
+                  <p className="text-sm text-slate-500">Zutaten werden geladen...</p>
+                ) : ingredients.length > 0 ? (
+                  Object.entries(groupedIngredients).map(([category, categoryIngredients]) => (
+                    <div key={category}>
+                      <h3 className="text-sm font-bold text-slate-700 mb-2">{category}</h3>
+                      <div className="space-y-2">
+                        {categoryIngredients.map((ingredient, idx) => (
+                          <div key={idx} className="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <Scale className="h-3 w-3 text-slate-400" />
+                              <span className="text-sm text-slate-700">{ingredient.name}</span>
+                            </div>
+                            <span className="text-sm font-medium text-slate-900">
+                              {ingredient.amount || ingredient.quantity || ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Keine Zutaten für dieses Rezept vorhanden.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* PASST GUT ZU Section */}
             <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-slate-500" />
@@ -219,6 +298,7 @@ export default function RecipeDetailPage() {
               </div>
             </section>
 
+            {/* TAGS Section */}
             <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <div className="flex items-center gap-2">
                 <Tags className="h-4 w-4 text-slate-500" />
@@ -243,6 +323,7 @@ export default function RecipeDetailPage() {
               </div>
             </section>
 
+            {/* ZUBEREITUNG Section */}
             <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <p className="text-sm font-semibold uppercase tracking-[0.14em] text-indigo-500">
                 Zubereitung

@@ -1,16 +1,19 @@
 // frontend/src/pages/TodayPage.jsx
 
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion';
+import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { ChefHat, Heart, RefreshCw, RotateCcw, ShoppingCart, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createActiveWeek, deleteActiveWeek, fetchActiveWeek } from '../api/weekApi';
 import { useMealSuggestions } from '../hooks/useMealSuggestions';
 
-const SWIPE_THRESHOLD = 110;
-const VELOCITY_THRESHOLD = 650;
+// KONFIGURATION - Eine Woche hat 7 Tage!
+const SWIPE_THRESHOLD = 100;
+const VELOCITY_THRESHOLD = 500;
 const MIN_SELECTIONS = 3;
 const TARGET_SELECTIONS = 7;
+
+// ==================== HELFER-FUNKTIONEN ====================
 
 const normalizeDays = (week) => {
   if (!week) return [];
@@ -60,6 +63,8 @@ const reasonsForMeal = (meal) => {
   return out.slice(0, 2);
 };
 
+// ==================== METRIC PILL COMPONENT ====================
+
 function MetricPill({ label, value }) {
   return (
     <div className="rounded-2xl bg-white/88 px-3 py-2 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
@@ -69,369 +74,8 @@ function MetricPill({ label, value }) {
   );
 }
 
-// frontend/src/pages/TodayPage.jsx
+// ==================== BESTÄTIGUNGSDIALOG ====================
 
-// Ersetze die KOMPLETTE EmptySwipeState Funktion mit dieser:
-
-function EmptySwipeState({ onWeekCreated }) {
-  const [meals, setMeals] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [likedMealIds, setLikedMealIds] = useState([]);
-  const [creating, setCreating] = useState(false);
-  const [localError, setLocalError] = useState('');
-  const [batch, setBatch] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Animation refs
-  const [exitX, setExitX] = useState(0);
-  const cardRef = useRef(null);
-  
-  const { meals: suggestedMeals, isLoading: mealsLoading, error } = useMealSuggestions({
-    householdType: 'single',
-    dietType: 'all',
-    maxCookingTime: 30,
-    limit: 7,
-    refreshKey: batch,
-  });
-
-  // Lade Meals
-  useEffect(() => {
-    if (suggestedMeals && suggestedMeals.length > 0) {
-      setMeals(suggestedMeals.filter(Boolean));
-      setIsLoading(false);
-    } else if (!mealsLoading) {
-      setIsLoading(false);
-    }
-  }, [suggestedMeals, mealsLoading]);
-
-  // Aktuelle Karte
-  const currentMeal = meals[currentIndex];
-  const selectedCount = likedMealIds.length;
-
-  // Nächsten Batch laden
-  const loadNextBatch = () => {
-    setBatch(prev => prev + 1);
-    setCurrentIndex(0);
-    setExitX(0);
-  };
-
-  // LIKE (nach rechts swipen)
-  const handleLike = async () => {
-    if (!currentMeal || creating) return;
-    
-    const mealId = getMealId(currentMeal);
-    if (mealId && !likedMealIds.includes(mealId)) {
-      const newLikedIds = [...likedMealIds, mealId];
-      setLikedMealIds(newLikedIds);
-      
-      // Animation nach rechts
-      setExitX(500);
-      
-      // Kurze Verzögerung für die Animation
-      setTimeout(() => {
-        if (currentIndex + 1 >= meals.length) {
-          if (newLikedIds.length >= TARGET_SELECTIONS) {
-            finishWeek(newLikedIds);
-          } else if (newLikedIds.length >= MIN_SELECTIONS) {
-            finishWeek(newLikedIds);
-          } else {
-            loadNextBatch();
-          }
-        } else {
-          setCurrentIndex(prev => prev + 1);
-          setExitX(0);
-        }
-      }, 200);
-    }
-  };
-
-  // UNLIKE (nach links swipen)
-  const handleReject = () => {
-    if (!currentMeal || creating) return;
-    
-    // Animation nach links
-    setExitX(-500);
-    
-    setTimeout(() => {
-      if (currentIndex + 1 >= meals.length) {
-        if (likedMealIds.length >= MIN_SELECTIONS) {
-          finishWeek(likedMealIds);
-        } else {
-          loadNextBatch();
-        }
-      } else {
-        setCurrentIndex(prev => prev + 1);
-        setExitX(0);
-      }
-    }, 200);
-  };
-
-  // Woche speichern
-  const finishWeek = async (mealIds) => {
-    if (creating || !mealIds.length || mealIds.length < MIN_SELECTIONS) {
-      if (mealIds.length < MIN_SELECTIONS) {
-        setLocalError(`Bitte wähle mindestens ${MIN_SELECTIONS} Gerichte aus.`);
-      }
-      return;
-    }
-
-    try {
-      setCreating(true);
-      setLocalError('');
-      await createActiveWeek({ selectedMealIds: mealIds });
-      await onWeekCreated?.();
-    } catch (err) {
-      console.error('Fehler beim Erstellen der Woche:', err);
-      setLocalError('Die Woche konnte gerade nicht erstellt werden.');
-      setCreating(false);
-    }
-  };
-
-  // Drag Ende Handler für flüssiges Swipen
-  const handleDragEnd = (event, info) => {
-    const offsetX = info.offset.x;
-    const velocityX = info.velocity.x;
-    
-    // Schwellwert für Swipe
-    if (offsetX > 100 || velocityX > 500) {
-      handleLike();
-    } else if (offsetX < -100 || velocityX < -500) {
-      handleReject();
-    } else {
-      // Zurück zur Mitte animieren
-      setExitX(0);
-    }
-  };
-
-  // Loading State
-  if (isLoading || mealsLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-slate-500">Lade Vorschläge...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error State
-  if (error && (!meals || meals.length === 0)) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
-          <h2 className="text-2xl font-bold text-slate-900">Vorschläge konnten nicht geladen werden.</h2>
-          <button
-            type="button"
-            onClick={loadNextBatch}
-            className="mt-5 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
-          >
-            Nochmal versuchen
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Keine Karte mehr aber genug Auswahl
-  if (!currentMeal && likedMealIds.length >= MIN_SELECTIONS) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Fast fertig</p>
-          <h2 className="mt-3 text-3xl font-bold text-slate-900">Auswahl speichern?</h2>
-          <p className="mt-3 text-base leading-7 text-slate-500">
-            {likedMealIds.length} Gerichte sind ausgewählt. Du kannst jetzt speichern oder noch weiter suchen.
-          </p>
-          <div className="mt-6 space-y-3">
-            <button
-              type="button"
-              onClick={() => finishWeek(likedMealIds)}
-              disabled={creating}
-              className="w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white disabled:opacity-60"
-            >
-              {creating ? 'Wird gespeichert...' : 'Auswahl speichern'}
-            </button>
-            <button
-              type="button"
-              onClick={loadNextBatch}
-              disabled={creating}
-              className="w-full rounded-[22px] bg-white px-5 py-4 text-base font-semibold text-slate-700 ring-1 ring-slate-200 disabled:opacity-60"
-            >
-              5 weitere Vorschläge
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Keine Karte mehr und nicht genug Auswahl
-  if (!currentMeal && likedMealIds.length < MIN_SELECTIONS) {
-    return (
-      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
-        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Weiter auswählen</p>
-          <h2 className="mt-3 text-3xl font-bold text-slate-900">Noch nicht genug dabei.</h2>
-          <p className="mt-3 text-base leading-7 text-slate-500">
-            Du hast bisher {likedMealIds.length} von mindestens {MIN_SELECTIONS} Gerichten ausgewählt.
-          </p>
-          <button
-            type="button"
-            onClick={loadNextBatch}
-            className="mt-6 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
-          >
-            5 neue Vorschläge
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const image = getMealImage(currentMeal);
-
-  return (
-    <div className="min-h-screen bg-slate-50 px-4 pt-5 pb-28">
-      <div className="mx-auto max-w-md">
-        {/* Fortschrittsanzeige */}
-        <div className="mb-3 flex items-center justify-between px-1 text-sm font-semibold text-slate-500">
-          <span>{selectedCount}/{TARGET_SELECTIONS} gewählt</span>
-          <span>mind. {MIN_SELECTIONS}</span>
-        </div>
-
-        {/* Swipe Card Container */}
-        <div className="relative h-[520px] w-full">
-          <motion.div
-            key={currentMeal.id || currentIndex}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.7}
-            onDragEnd={handleDragEnd}
-            animate={{ x: exitX }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            className="absolute w-full cursor-grab active:cursor-grabbing"
-            style={{ touchAction: 'pan-y' }}
-          >
-            <div className="relative overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#f7f3ff_0%,#f8f8fb_42%,#ffffff_100%)] px-5 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/70">
-              
-              {/* Like/Dislike Overlays während des Swipens */}
-              <motion.div
-                className="absolute inset-0 flex items-center justify-center rounded-[34px] pointer-events-none z-10"
-                style={{
-                  background: "linear-gradient(135deg, rgba(34,197,94,0.9) 0%, rgba(16,185,129,0.8) 100%)",
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ 
-                  opacity: exitX > 100 ? 0.8 : 0,
-                  x: exitX > 100 ? 0 : -100
-                }}
-                transition={{ duration: 0.1 }}
-              >
-                <Heart className="w-20 h-20 text-white fill-white" />
-              </motion.div>
-              
-              <motion.div
-                className="absolute inset-0 flex items-center justify-center rounded-[34px] pointer-events-none z-10"
-                style={{
-                  background: "linear-gradient(135deg, rgba(239,68,68,0.9) 0%, rgba(220,38,38,0.8) 100%)",
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ 
-                  opacity: exitX < -100 ? 0.8 : 0,
-                  x: exitX < -100 ? 0 : 100
-                }}
-                transition={{ duration: 0.1 }}
-              >
-                <X className="w-20 h-20 text-white" />
-              </motion.div>
-
-              {/* Bild */}
-              {image ? (
-                <div className="mb-4 h-[140px] overflow-hidden rounded-[24px] bg-slate-200">
-                  <img src={image} alt={getMealTitle(currentMeal)} className="h-full w-full object-cover" />
-                </div>
-              ) : (
-                <div className="mb-4 h-[140px] rounded-[24px] bg-[linear-gradient(135deg,#d8ccff_0%,#f6ebff_45%,#ffeccf_100%)]" />
-              )}
-
-              {/* Inhalt */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-500">Vorschlag</p>
-                  <h1 className="mt-3 max-w-[220px] text-[22px] font-bold leading-tight text-slate-900">
-                    {getMealTitle(currentMeal)}
-                  </h1>
-                </div>
-                <span className="mt-8 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600">
-                  {getMealCategory(currentMeal)}
-                </span>
-              </div>
-
-              {/* Metriken */}
-              <div className="mt-5 grid grid-cols-3 gap-2.5">
-                <MetricPill
-                  label="Zeit"
-                  value={getMealTime(currentMeal) ? `${getMealTime(currentMeal)} Min.` : '- Min.'}
-                />
-                <MetricPill label="Level" value={getMealDifficulty(currentMeal)} />
-                <MetricPill label="Typ" value={getMealType(currentMeal)} />
-              </div>
-
-              {/* Beschreibung */}
-              <div className="mt-5">
-                <h2 className="text-[18px] font-bold text-slate-900">Warum das passt</h2>
-                <ul className="mt-3 space-y-3 text-[15px] leading-7 text-slate-500">
-                  {reasonsForMeal(currentMeal).map((reason) => (
-                    <li key={reason}>• {reason}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <p className="mt-5 text-xs text-slate-400 text-center">
-                ← Links swipen | Rechts swipen →
-              </p>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Buttons */}
-        <div className="mt-4 flex items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={handleReject}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
-            aria-label="Ablehnen"
-          >
-            <X className="h-6 w-6" />
-          </button>
-          <button
-            type="button"
-            onClick={loadNextBatch}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
-            aria-label="Neue Vorschläge laden"
-          >
-            <RefreshCw className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={handleLike}
-            disabled={creating}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] active:scale-95 transition-transform disabled:opacity-60"
-            aria-label="Gefällt mir"
-          >
-            <Heart className="h-7 w-7 fill-current" />
-          </button>
-        </div>
-
-        {localError && (
-          <p className="mt-3 text-center text-sm font-medium text-rose-500">{localError}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Bestätigungsdialog-Komponente
 function ResetConfirmDialog({ isOpen, onConfirm, onCancel, isResetting }) {
   if (!isOpen) return null;
   
@@ -467,6 +111,365 @@ function ResetConfirmDialog({ isOpen, onConfirm, onCancel, isResetting }) {
     </div>
   );
 }
+
+// ==================== EMPTY SWIPE STATE (TINDER STYLE) ====================
+
+function EmptySwipeState({ onWeekCreated }) {
+  const [meals, setMeals] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [likedMealIds, setLikedMealIds] = useState([]);
+  const [creating, setCreating] = useState(false);
+  const [localError, setLocalError] = useState('');
+  const [batch, setBatch] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [exitX, setExitX] = useState(0);
+  
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-220, 0, 220], [-16, 0, 16]);
+  const y = useTransform(x, [-220, 0, 220], [14, 0, 14]);
+  const likeOpacity = useTransform(x, [24, 120], [0, 1]);
+  const nopeOpacity = useTransform(x, [-120, -24], [1, 0]);
+  
+  const { meals: suggestedMeals, isLoading: mealsLoading, error } = useMealSuggestions({
+    householdType: 'single',
+    dietType: 'all',
+    maxCookingTime: 30,
+    limit: 10,
+    refreshKey: batch,
+  });
+
+  useEffect(() => {
+    if (suggestedMeals && suggestedMeals.length > 0) {
+      setMeals(suggestedMeals.filter(Boolean));
+      setIsLoading(false);
+    } else if (!mealsLoading) {
+      setIsLoading(false);
+    }
+  }, [suggestedMeals, mealsLoading]);
+
+  const currentMeal = meals[currentIndex];
+  const selectedCount = likedMealIds.length;
+
+  const loadNextBatch = () => {
+    setBatch(prev => prev + 1);
+    setCurrentIndex(0);
+    setExitX(0);
+    x.set(0);
+  };
+
+  const finishWeek = async (mealIds) => {
+    if (creating) return;
+    
+    if (mealIds.length < MIN_SELECTIONS) {
+      setLocalError(`Bitte wähle mindestens ${MIN_SELECTIONS} Gerichte aus.`);
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setLocalError('');
+      await createActiveWeek({ selectedMealIds: mealIds });
+      await onWeekCreated?.();
+    } catch (err) {
+      console.error('Fehler beim Erstellen der Woche:', err);
+      setLocalError('Die Woche konnte gerade nicht erstellt werden.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!currentMeal || creating) return;
+    
+    const mealId = getMealId(currentMeal);
+    if (mealId && !likedMealIds.includes(mealId)) {
+      const newLikedIds = [...likedMealIds, mealId];
+      setLikedMealIds(newLikedIds);
+      setExitX(500);
+      
+      setTimeout(() => {
+        if (newLikedIds.length >= TARGET_SELECTIONS) {
+          finishWeek(newLikedIds);
+          return;
+        }
+        
+        if (currentIndex + 1 >= meals.length) {
+          if (newLikedIds.length >= MIN_SELECTIONS) {
+            setCurrentIndex(prev => prev + 1);
+          } else {
+            loadNextBatch();
+          }
+        } else {
+          setCurrentIndex(prev => prev + 1);
+          setExitX(0);
+          x.set(0);
+        }
+      }, 200);
+    }
+  };
+
+  const handleReject = () => {
+    if (!currentMeal || creating) return;
+    setExitX(-500);
+    
+    setTimeout(() => {
+      if (currentIndex + 1 >= meals.length) {
+        if (likedMealIds.length >= MIN_SELECTIONS) {
+          setCurrentIndex(prev => prev + 1);
+        } else {
+          loadNextBatch();
+        }
+      } else {
+        setCurrentIndex(prev => prev + 1);
+        setExitX(0);
+        x.set(0);
+      }
+    }, 200);
+  };
+
+  const handleReload = () => {
+    if (creating) return;
+    loadNextBatch();
+  };
+
+  const handleDragEnd = (_, info) => {
+    const offsetX = info.offset.x;
+    const velocityX = info.velocity.x;
+    
+    if (offsetX > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
+      handleLike();
+    } else if (offsetX < -SWIPE_THRESHOLD || velocityX < -VELOCITY_THRESHOLD) {
+      handleReject();
+    } else {
+      x.set(0);
+    }
+  };
+
+  // ==================== RENDER ZUSTÄNDE ====================
+
+  if (isLoading || mealsLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-slate-500">Lade Vorschläge...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && (!meals || meals.length === 0)) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <h2 className="text-2xl font-bold text-slate-900">Vorschläge konnten nicht geladen werden.</h2>
+          <button
+            type="button"
+            onClick={handleReload}
+            className="mt-5 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
+          >
+            Nochmal versuchen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentMeal && selectedCount >= TARGET_SELECTIONS) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80 text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ChefHat className="h-8 w-8 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">Woche ist voll! 🎉</h2>
+          <p className="mt-2 text-slate-600">
+            Du hast alle 7 Tage der Woche mit Gerichten gefüllt.
+          </p>
+          <button
+            type="button"
+            onClick={() => finishWeek(likedMealIds)}
+            disabled={creating}
+            className="mt-6 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white disabled:opacity-60"
+          >
+            {creating ? 'Wird gespeichert...' : 'Woche speichern'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentMeal && selectedCount >= MIN_SELECTIONS) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Fast fertig</p>
+          <h2 className="mt-3 text-3xl font-bold text-slate-900">Auswahl speichern?</h2>
+          <p className="mt-3 text-base leading-7 text-slate-500">
+            Du hast {selectedCount} von {TARGET_SELECTIONS} Gerichten ausgewählt.
+            {selectedCount < TARGET_SELECTIONS && ` Du kannst noch ${TARGET_SELECTIONS - selectedCount} weitere wählen oder jetzt speichern.`}
+          </p>
+          <div className="mt-6 space-y-3">
+            <button
+              type="button"
+              onClick={() => finishWeek(likedMealIds)}
+              disabled={creating}
+              className="w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white disabled:opacity-60"
+            >
+              {creating ? 'Wird gespeichert...' : `Auswahl speichern (${selectedCount}/${TARGET_SELECTIONS})`}
+            </button>
+            <button
+              type="button"
+              onClick={loadNextBatch}
+              disabled={creating}
+              className="w-full rounded-[22px] bg-white px-5 py-4 text-base font-semibold text-slate-700 ring-1 ring-slate-200 disabled:opacity-60"
+            >
+              {TARGET_SELECTIONS - selectedCount} weitere Vorschläge
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentMeal && selectedCount < MIN_SELECTIONS) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
+        <div className="mx-auto max-w-md rounded-[30px] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-500">Weiter auswählen</p>
+          <h2 className="mt-3 text-3xl font-bold text-slate-900">Noch nicht genug dabei.</h2>
+          <p className="mt-3 text-base leading-7 text-slate-500">
+            Du hast bisher {selectedCount} von mindestens {MIN_SELECTIONS} Gerichten ausgewählt.
+          </p>
+          <button
+            type="button"
+            onClick={loadNextBatch}
+            className="mt-6 w-full rounded-[22px] bg-slate-950 px-5 py-4 text-base font-semibold text-white"
+          >
+            10 neue Vorschläge
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const image = getMealImage(currentMeal);
+
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 pt-5 pb-28">
+      <div className="mx-auto max-w-md">
+        <div className="mb-3 flex items-center justify-between px-1 text-sm font-semibold text-slate-500">
+          <span>✅ {selectedCount}/{TARGET_SELECTIONS} gewählt</span>
+          <span>mind. {MIN_SELECTIONS}</span>
+        </div>
+
+        <div className="w-full bg-slate-200 rounded-full h-2 mb-4">
+          <div 
+            className="bg-indigo-500 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${(selectedCount / TARGET_SELECTIONS) * 100}%` }}
+          />
+        </div>
+
+        <div className="relative h-[520px]">
+          <motion.div
+            key={currentMeal.id || currentIndex}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.7}
+            onDragEnd={handleDragEnd}
+            animate={{ x: exitX }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            style={{ x, rotate, y }}
+            className="relative overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#f7f3ff_0%,#f8f8fb_42%,#ffffff_100%)] px-5 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/70"
+          >
+            <motion.div
+              style={{ opacity: nopeOpacity }}
+              className="pointer-events-none absolute left-4 top-4 rounded-2xl border-2 border-rose-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-rose-500 z-10"
+            >
+              Nein
+            </motion.div>
+
+            <motion.div
+              style={{ opacity: likeOpacity }}
+              className="pointer-events-none absolute right-4 top-4 rounded-2xl border-2 border-emerald-400 bg-white/92 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-600 z-10"
+            >
+              Passt
+            </motion.div>
+
+            {image ? (
+              <div className="mb-4 h-[140px] overflow-hidden rounded-[24px] bg-slate-200">
+                <img src={image} alt={getMealTitle(currentMeal)} className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="mb-4 h-[140px] rounded-[24px] bg-[linear-gradient(135deg,#d8ccff_0%,#f6ebff_45%,#ffeccf_100%)]" />
+            )}
+
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-500">Vorschlag</p>
+                <h1 className="mt-3 max-w-[220px] text-[22px] font-bold leading-tight text-slate-900">
+                  {getMealTitle(currentMeal)}
+                </h1>
+              </div>
+              <span className="mt-8 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600">
+                {getMealCategory(currentMeal)}
+              </span>
+            </div>
+
+            <div className="mt-5 grid grid-cols-3 gap-2.5">
+              <MetricPill label="Zeit" value={getMealTime(currentMeal) ? `${getMealTime(currentMeal)} Min.` : '- Min.'} />
+              <MetricPill label="Level" value={getMealDifficulty(currentMeal)} />
+              <MetricPill label="Typ" value={getMealType(currentMeal)} />
+            </div>
+
+            <div className="mt-5">
+              <h2 className="text-[18px] font-bold text-slate-900">Warum das passt</h2>
+              <ul className="mt-3 space-y-3 text-[15px] leading-7 text-slate-500">
+                {reasonsForMeal(currentMeal).map((reason) => (
+                  <li key={reason}>• {reason}</li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="mt-5 text-xs text-slate-400 text-center">← Links swipen | Rechts swipen →</p>
+          </motion.div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={handleReject}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
+            aria-label="Ablehnen"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            onClick={handleReload}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 shadow-[0_8px_22px_rgba(15,23,42,0.08)] ring-1 ring-slate-200 active:scale-95 transition-transform"
+            aria-label="Neue Vorschläge laden"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleLike}
+            disabled={creating}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_12px_30px_rgba(244,63,94,0.30)] active:scale-95 transition-transform disabled:opacity-60"
+            aria-label="Gefällt mir"
+          >
+            <Heart className="h-7 w-7 fill-current" />
+          </button>
+        </div>
+
+        {localError && <p className="mt-3 text-center text-sm font-medium text-rose-500">{localError}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ==================== TODAY PAGE HAUPTKOMPONENTE ====================
 
 export default function TodayPage() {
   const navigate = useNavigate();
@@ -504,25 +507,10 @@ export default function TodayPage() {
     try {
       setResetting(true);
       setResetError('');
-      
-      console.log('🔄 Lösche Woche...');
-      
-      // API-Aufruf zum Löschen der kompletten Woche
-      const result = await deleteActiveWeek();
-      
-      console.log('✅ Löschergebnis:', result);
-      
-      // WICHTIG: Nach dem Löschen die aktuelle Woche NEU laden
-      // Das sollte null zurückgeben, weil keine aktive Woche mehr existiert
+      await deleteActiveWeek();
       await loadWeek();
-      
-      // Optional: Kurze Erfolgsmeldung
-      if (result && result.deletedWeeks > 0) {
-        console.log(`✅ Erfolg: ${result.deletedShoppingItems} Einkaufsitems gelöscht`);
-      }
-      
     } catch (error) {
-      console.error('❌ Fehler beim Zurücksetzen:', error);
+      console.error('Fehler beim Zurücksetzen der Woche:', error);
       setResetError('Die Woche konnte nicht zurückgesetzt werden. Bitte versuche es später erneut.');
     } finally {
       setResetting(false);
@@ -530,8 +518,20 @@ export default function TodayPage() {
     }
   };
 
-  if (loadingWeek) return <div className="min-h-screen bg-slate-50" />;
-  if (!hasContent) return <EmptySwipeState onWeekCreated={loadWeek} />;
+  if (loadingWeek) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-slate-500">Lade Wochenplan...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasContent) {
+    return <EmptySwipeState onWeekCreated={loadWeek} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 pt-6 pb-28">
@@ -592,7 +592,6 @@ export default function TodayPage() {
           {days.length} Gerichte geplant · {openItems} Einkäufe offen
         </div>
 
-        {/* NEU: Reset-Button mit Bestätigungsdialog */}
         <button
           type="button"
           onClick={() => setShowResetConfirm(true)}
@@ -602,13 +601,11 @@ export default function TodayPage() {
           <RotateCcw className="h-4 w-4" />
           {resetting ? 'Wird gelöscht...' : 'Komplette Woche löschen'}
         </button>
-        
-        {/* NEU: Fehlermeldung anzeigen */}
+
         {resetError && (
           <p className="text-center text-sm font-medium text-rose-500">{resetError}</p>
         )}
-        
-        {/* NEU: Bestätigungsdialog */}
+
         <ResetConfirmDialog
           isOpen={showResetConfirm}
           onConfirm={handleResetWeek}

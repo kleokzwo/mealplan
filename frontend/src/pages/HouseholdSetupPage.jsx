@@ -4,8 +4,8 @@ import { saveOnboardingProfile } from "../api/userApi";
 
 const OPTIONS = [
   { value: "single", label: "Ich lebe allein" },
-  { value: "couple", label: "Wir sind zu zweit" },
-  { value: "family", label: "Wir sind eine Familie" },
+  { value: "paar", label: "Wir sind zu zweit" },
+  { value: "familie", label: "Wir sind eine Familie" },
 ];
 
 export default function HouseholdSetupPage() {

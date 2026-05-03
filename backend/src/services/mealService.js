@@ -17,11 +17,9 @@ const normalizeHouseholdType = (householdType) => {
 
   const value = String(householdType).toLowerCase().trim();
 
-  if (value === 'family') return 'familie';
   if (value === 'familie') return 'familie';
   if (value === 'single') return 'single';
   if (value === 'paar') return 'paar';
-  if (value === 'couple') return 'paar';
 
   return householdType;
 };
@@ -193,5 +191,17 @@ export const getMealSteps = async (mealId) => {
     [mealId]
   );
 
+  return rows;
+};
+
+export const getIngredientsByMealId = async (mealId) => {
+  const [rows] = await pool.query(
+    `SELECT id, name, amount, category, meal_id AS mealId
+     FROM meal_ingredients
+     WHERE meal_id = ?
+     ORDER BY category ASC, name ASC`,
+    [mealId]
+  );
+  
   return rows;
 };

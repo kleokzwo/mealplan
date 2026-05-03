@@ -34,3 +34,17 @@ export const updateMealSuggestionStatus = async (id, status) => {
 export const fetchMealSteps = async (mealId) => {
   return httpClient.get(`/meals/${mealId}/steps`);
 };
+
+export const fetchMealIngredients = async (mealId) => {
+  try {
+    const response = await httpClient.get(`/meals/${mealId}/ingredients`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Fehler beim Laden der Zutaten:', error);
+    throw error;
+  }
+};
