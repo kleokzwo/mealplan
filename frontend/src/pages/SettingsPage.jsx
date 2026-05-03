@@ -1,6 +1,7 @@
 import { ArrowLeft, Crown, LogOut, Shield, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { APP_VERSION } from "../config/appInfo";
 
 export default function SettingsPage({ onLogout }) {
   const navigate = useNavigate();
@@ -117,6 +118,9 @@ export default function SettingsPage({ onLogout }) {
             Logout
           </button>
         </div>
+        <p className="mt-8 text-center text-xs text-slate-400">
+          MealPlan Version {APP_VERSION}
+        </p>
       </div>
     </motion.main>
   );

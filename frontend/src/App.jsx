@@ -24,64 +24,106 @@ import SettingsPage from "./pages/SettingsPage";
 import FamilyPage from "./pages/FamilyPage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
 import PrivacyPage from "./pages/PrivacyPage";
+import ChangelogPage from "./pages/ChangelogPage";
+
+const AUTH_TOKEN_KEY = "token";
+const LEGACY_AUTH_TOKEN_KEY = "mealplan_token";
+
+function clearAuthStorage() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+}
+
+function getStoredToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(LEGACY_AUTH_TOKEN_KEY);
+}
 
 function ProtectedRoute({ token, children }) {
   if (!token) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
-  return children
+  return children;
 }
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [token, setToken] = useState(() => getStoredToken());
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadUser() {
-      if (!token) {
+      const currentToken = getStoredToken();
+
+      if (!currentToken) {
+        clearAuthStorage();
+        if (!isMounted) return;
+        setToken(null);
         setUser(null);
         setIsLoading(false);
         return;
       }
 
+      // Falls noch ein alter Key existiert, vereinheitlichen wir sauber auf "token".
+      if (currentToken !== localStorage.getItem(AUTH_TOKEN_KEY)) {
+        localStorage.setItem(AUTH_TOKEN_KEY, currentToken);
+        localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+      }
+
+      if (!isMounted) return;
       setIsLoading(true);
 
       try {
         const me = await getMe();
-        setUser(me);
+        const normalizedUser = me?.user ?? me;
+
+        if (!normalizedUser) {
+          throw new Error("Kein Benutzerprofil erhalten.");
+        }
+
+        if (!isMounted) return;
+        setToken(currentToken);
+        setUser(normalizedUser);
       } catch (err) {
         console.error("GET ME ERROR:", err);
-        localStorage.removeItem("token");
-        localStorage.removeItem("mealplan_token");
+        clearAuthStorage();
+
+        if (!isMounted) return;
         setToken(null);
         setUser(null);
         navigate("/login", { replace: true });
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     loadUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, [token, navigate]);
 
   function handleAuthSuccess(nextToken) {
-    localStorage.setItem("token", nextToken);
+    if (!nextToken) return;
+
+    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
     setToken(nextToken);
     navigate("/", { replace: true });
   }
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("mealplan_token");
-
+    clearAuthStorage();
     setToken(null);
     setUser(null);
-
     navigate("/login", { replace: true });
   }
 
@@ -202,6 +244,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/changelog" element={<ChangelogPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
